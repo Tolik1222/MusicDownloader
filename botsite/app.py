@@ -31,18 +31,17 @@ def search_soundcloud(query):
                     tracks.append({
                         'title': entry.get('title'),
                         'url': entry.get('webpage_url'),
+                        'audio_url': entry.get('url'),
                         'uploader': entry.get('uploader'),
                         'duration': entry.get('duration_string'),
                         'thumbnail': entry.get('thumbnail')
                     })
                 return tracks
         except Exception as e:
-            logging.error(f"Помилка пошуку для запиту '{query}': {str(e)}")
+            logging.error(f"Помилка пошуку: {str(e)}")
             return []
-
 @app.route('/')
 def index():
-    # Отримуємо історію з сесії або пустий список
     history = session.get('download_history', [])
     return render_template('index.html', history=history)
 
@@ -87,4 +86,5 @@ def download():
         return f"Помилка: {str(e)}"
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port)

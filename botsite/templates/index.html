@@ -54,6 +54,18 @@
             background: #f97316;
             border-radius: 10px;
         }
+
+        audio::-webkit-media-controls-panel {
+            background-color: rgba(39, 39, 42, 0.9);
+        }
+        audio::-webkit-media-controls-current-time-display,
+        audio::-webkit-media-controls-time-remaining-display {
+            color: #f97316;
+        }
+        audio::-webkit-media-controls-play-button,
+        audio::-webkit-media-controls-mute-button {
+            filter: invert(60%) sepia(80%) saturate(500%) hue-rotate(0deg);
+        }
     </style>
 </head>
 <body>
@@ -70,7 +82,7 @@
             <p class="text-zinc-500 mb-8">
                 Твій персональний архів музики
             </p>
-            <div class="w-full max-w-2xl p-1 bg-gradient-to-r from-orange-500/20 to-transparent rounded-2xl">
+            <div class="w-full max-w-2xl p-1 bg-gradient-to-r from-orange-500/20 to-transparent rounded-2xl text-left">
                 <form action="/search" method="POST" class="flex gap-2 bg-zinc-900 p-2 rounded-xl">
                     <input type="text" name="query" placeholder="Встав посилання або назву треку..." required class="flex-1 bg-transparent p-3 outline-none border-none text-lg text-white">
                     <button type="submit" onclick="showLoading(this)" class="bg-orange-500 hover:bg-orange-600 text-white font-bold px-8 py-3 rounded-lg transition-all active:scale-95">
@@ -81,7 +93,7 @@
         </div>
 
         <div class="flex flex-col lg:flex-row gap-8">
-            <div class="hidden lg:block w-64 shrink-0">
+            <div class="hidden lg:block w-64 shrink-0 text-left">
                 <div class="sticky top-8 p-4 bg-zinc-900/40 backdrop-blur-xl border border-zinc-700/40 rounded-xl">
                     <h3 class="text-orange-500 font-bold mb-4 uppercase text-[10px] tracking-widest">
                         Нещодавно скачано
@@ -100,7 +112,7 @@
                 </div>
             </div>
 
-            <div class="flex-1">
+            <div class="flex-1 text-left">
                 {% if tracks %}
                 <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
                     {% for track in tracks %}
@@ -122,6 +134,14 @@
                             <p class="text-zinc-400 text-sm mb-4">
                                 {{ track.uploader }}
                             </p>
+
+                            <div class="mb-5">
+                                <audio controls class="w-full h-8 opacity-70 hover:opacity-100 transition-opacity">
+                                    <source src="{{ track.audio_url }}" type="audio/mpeg">
+                                    Браузер не підтримує аудіо.
+                                </audio>
+                            </div>
+
                             <div class="flex items-center justify-between gap-4">
                                 <span class="text-xs text-zinc-500 font-mono">
                                     {{ track.duration }}
@@ -160,13 +180,24 @@
                     <span>Обробка...</span>
                 </div>
             `;
-            const waitTime = button.closest('form').action.includes('search') ? 4000 : 15000;
+            const isSearch = button.closest('form').action.includes('search');
+            const waitTime = isSearch ? 4000 : 15000;
+            
             setTimeout(() => {
                 button.style.pointerEvents = 'auto';
                 button.style.opacity = '1';
                 button.innerHTML = originalText;
             }, waitTime);
         }
+
+        document.addEventListener('play', function(e){
+            var audios = document.getElementsByTagName('audio');
+            for(var i = 0, len = audios.length; i < len;i++){
+                if(audios[i] != e.target){
+                    audios[i].pause();
+                }
+            }
+        }, true);
     </script>
 </body>
 </html>
