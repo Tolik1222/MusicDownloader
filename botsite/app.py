@@ -7,8 +7,7 @@ import logging
 app = Flask(__name__)
 app.secret_key = 'super_secret_key_for_session' # Потрібно для роботи сесій
 
-# Налаштування логування в файл
-log_path = r'E:\music_bot\errors.log'
+log_path = r'errors.log'
 logging.basicConfig(filename=log_path, level=logging.ERROR, 
                     format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -60,12 +59,11 @@ def search():
 def download():
     url = request.form.get('url')
     title = request.form.get('title')
-    
-    # Оновлюємо історію в сесії
+
     history = session.get('download_history', [])
     if title not in history:
-        history.insert(0, title) # Додаємо в початок
-        session['download_history'] = history[:5] # Тримаємо останні 5
+        history.insert(0, title)
+        session['download_history'] = history[:5]
 
     timestamp = int(time.time())
     file_path = os.path.join(DOWNLOAD_FOLDER, f"track_{timestamp}")
