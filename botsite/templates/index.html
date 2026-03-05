@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SoundCloud Downloader</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .animate-spin-custom {
+            animation: spin 1s linear infinite;
+        }
+        @keyframes blobMove {
+            0% { transform: translate(0px, 0px) scale(1); }
+            33% { transform: translate(80px, -60px) scale(1.2); }
+            66% { transform: translate(-60px, 40px) scale(0.9); }
+            100% { transform: translate(0px, 0px) scale(1); }
+        }
+        .blob {
+            position: fixed;
+            width: 500px;
+            height: 500px;
+            border-radius: 50%;
+            filter: blur(120px);
+            opacity: 0.35;
+            animation: blobMove 25s infinite ease-in-out;
+            z-index: 0;
+        }
+        .noise {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            opacity: 0.05;
+            z-index: 0;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+        }
+        body {
+            margin: 0;
+            color: white;
+            min-height: 100vh;
+            font-family: sans-serif;
+            background: #0b0b0d;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #f97316;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="blob" style="background:#f97316; top:-120px; left:-120px;"></div>
+    <div class="blob" style="background:#a855f7; bottom:-150px; right:-120px; animation-delay:6s;"></div>
+    <div class="blob" style="background:#fb923c; top:40%; left:60%; animation-delay:12s;"></div>
+    <div class="noise"></div>
+
+    <div class="max-w-7xl mx-auto p-4 md:p-8 relative z-10">
+        <div class="flex flex-col items-center mb-12 text-center">
+            <h1 class="text-5xl font-black text-orange-500 mb-2 tracking-tighter italic">
+                SC DOWNLOADER
+            </h1>
+            <p class="text-zinc-500 mb-8">
+                Твій персональний архів музики
+            </p>
+            <div class="w-full max-w-2xl p-1 bg-gradient-to-r from-orange-500/20 to-transparent rounded-2xl">
+                <form action="/search" method="POST" class="flex gap-2 bg-zinc-900 p-2 rounded-xl">
+                    <input type="text" name="query" placeholder="Встав посилання або назву треку..." required class="flex-1 bg-transparent p-3 outline-none border-none text-lg text-white">
+                    <button type="submit" onclick="showLoading(this)" class="bg-orange-500 hover:bg-orange-600 text-white font-bold px-8 py-3 rounded-lg transition-all active:scale-95">
+                        Знайти
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <div class="flex flex-col lg:flex-row gap-8">
+            <div class="hidden lg:block w-64 shrink-0">
+                <div class="sticky top-8 p-4 bg-zinc-900/40 backdrop-blur-xl border border-zinc-700/40 rounded-xl">
+                    <h3 class="text-orange-500 font-bold mb-4 uppercase text-[10px] tracking-widest">
+                        Нещодавно скачано
+                    </h3>
+                    <ul class="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                        {% for item in history %}
+                        <li class="text-sm text-zinc-300 truncate border-b border-zinc-700/30 pb-2">
+                            🎵 {{ item }}
+                        </li>
+                        {% else %}
+                        <li class="text-xs text-zinc-500 italic text-center">
+                            Історія порожня
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+
+            <div class="flex-1">
+                {% if tracks %}
+                <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+                    {% for track in tracks %}
+                    <div class="group bg-zinc-900/40 backdrop-blur-xl border border-zinc-700/50 rounded-2xl overflow-hidden hover:border-orange-500/40 transition-all hover:shadow-2xl hover:shadow-orange-500/10">
+                        <div class="relative aspect-square">
+                            {% if track.thumbnail %}
+                            <img src="{{ track.thumbnail }}" class="w-full h-full object-cover transition-transform group-hover:scale-105">
+                            {% else %}
+                            <div class="w-full h-full bg-zinc-700 flex items-center justify-center text-3xl">
+                                🎵
+                            </div>
+                            {% endif %}
+                            <div class="absolute inset-0 bg-gradient-to-t from-zinc-900/80 via-transparent to-transparent"></div>
+                        </div>
+                        <div class="p-5">
+                            <h3 class="font-bold text-lg line-clamp-1 mb-1">
+                                {{ track.title }}
+                            </h3>
+                            <p class="text-zinc-400 text-sm mb-4">
+                                {{ track.uploader }}
+                            </p>
+                            <div class="flex items-center justify-between gap-4">
+                                <span class="text-xs text-zinc-500 font-mono">
+                                    {{ track.duration }}
+                                </span>
+                                <form action="/download" method="POST" class="flex-1">
+                                    <input type="hidden" name="url" value="{{ track.url }}">
+                                    <input type="hidden" name="title" value="{{ track.title }}">
+                                    <button type="submit" onclick="showLoading(this)" class="w-full bg-zinc-100 hover:bg-white text-black font-bold py-2 rounded-lg text-sm transition-all active:scale-95">
+                                        Скачати
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="h-64 flex flex-col items-center justify-center border-2 border-dashed border-zinc-800 rounded-3xl backdrop-blur-sm">
+                    <p class="text-zinc-600">
+                        Результати пошуку з'являться тут
+                    </p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function showLoading(button) {
+            const originalText = button.innerHTML;
+            button.style.pointerEvents = 'none';
+            button.style.opacity = '0.6';
+            button.innerHTML = `
+                <div style="display:flex;align-items:center;gap:8px;justify-content:center;">
+                    <div class="animate-spin-custom" style="width:14px;height:14px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;"></div>
+                    <span>Обробка...</span>
+                </div>
+            `;
+            const waitTime = button.closest('form').action.includes('search') ? 4000 : 15000;
+            setTimeout(() => {
+                button.style.pointerEvents = 'auto';
+                button.style.opacity = '1';
+                button.innerHTML = originalText;
+            }, waitTime);
+        }
+    </script>
+</body>
+</html>
