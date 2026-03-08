@@ -38,22 +38,21 @@ def route_search_yt():
 def download():
     url = request.form.get('url')
     
-    # Визначаємо, звідки прийшло посилання
     if "youtube.com" in url or "youtu.be" in url:
         download_link = get_yt_download_url(url)
         if download_link:
-            return redirect(download_link)
-        return "Помилка завантаження YouTube. Спробуйте пізніше.", 500
-    
+            return redirect(download_link) # Користувач качає прямо з сервера Cobalt
+        return "Помилка: Усі резервні сервери зараз перевантажені.", 500
+        
     elif "soundcloud.com" in url:
-        # Cobalt також чудово підтримує завантаження з SoundCloud!
-        # Тому ми можемо використати ту саму функцію для отримання прямого посилання
+        from core.downloader_sc import search_sc 
         download_link = get_yt_download_url(url) 
         if download_link:
             return redirect(download_link)
         return "Помилка завантаження SoundCloud.", 500
         
     return "Невідоме посилання", 400
+
 
 @app.route(f'/{TOKEN}', methods=['POST'])
 def webhook():

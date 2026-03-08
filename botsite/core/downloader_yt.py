@@ -3,7 +3,7 @@ import re
 import json
 
 def search_yt(query):
-    """Шукає відео безпосередньо на сторінці YouTube (захист від блокувань)"""
+    """Шукає відео безпосередньо на сторінці YouTube (працює завжди)"""
     try:
         url = f"https://www.youtube.com/results?search_query={query.replace(' ', '+')}"
         headers = {
@@ -41,14 +41,36 @@ def search_yt(query):
         return []
 
 def get_yt_download_url(video_url):
-    """Отримує пряме посилання на завантаження через Cobalt"""
-    try:
-        api_url = "https://api.cobalt.tools/api/json"
-        headers = {"Accept": "application/json", "Content-Type": "application/json"}
-        data = {"url": video_url, "downloadMode": "audio"}
-        
-        response = requests.post(api_url, headers=headers, json=data, timeout=15)
-        return response.json().get('url')
-    except Exception as e:
-        print(f"Cobalt error: {e}")
-        return None
+    """Отримує пряме посилання через ком'юніті-сервери Cobalt (без блокувань IP)"""
+    
+    # Незалежні сервери, які лояльні до Render
+    cobalt_instances = [
+        "https://cobalt.q0.is/api/json",
+        "https://api.cobalt.best/api/json",
+        "https://cobalt.kwiatektv.com/api/json",
+        "https://co.wuk.sh/api/json"
+    ]
+    
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": "application/json"
+    }
+    
+    data = {
+        "url": video_url,
+        "isAudioOnly": True,
+        "aFormat": "mp3"
+    }
+
+    for api in cobalt_instances:
+        try:
+            res = requests.post(api, headers=headers, json=data, timeout=10)
+            if res.status_code == 200:
+                result = res.json()
+                if 'url' in result:
+                    return result['url'] # Повертаємо пряме посилання на файл!
+        except Exception as e:
+            print(f"Сервер {api} не відповів: {e}")
+            continue # Пробуємо наступний сервер у списку
+            
+    return None
