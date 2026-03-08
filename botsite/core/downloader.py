@@ -2,6 +2,19 @@ import yt_dlp
 import os
 import time
 
+def get_cookie_path():
+    path = os.path.join(os.path.dirname(__file__), '..', 'youtube_cookies.txt')
+    return path if os.path.exists(path) else None
+
+def search_media(query, source='sc'):
+    search_prefix = 'scsearch6:' if source == 'sc' else 'ytsearch6:'
+    ydl_opts = {
+        'format': 'bestaudio/best',
+        'noplaylist': True,
+        'quiet': True,
+        'cookiefile': get_cookie_path(), # Додаємо куки тут
+    }
+
 def search_media(query, source='sc'):
     search_prefix = 'scsearch6:' if source == 'sc' else 'ytsearch6:'
     ydl_opts = {
@@ -10,6 +23,13 @@ def search_media(query, source='sc'):
         'quiet': True,
         'force_generic_extractor': False,
     }
+
+    ydl_opts = {
+    'format': 'bestaudio/best',
+    'noplaylist': True,
+    'quiet': True,
+    'cookiefile': 'youtube_cookies.txt', # Додай цей рядок обов'язково
+}
     
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         try:
@@ -45,3 +65,10 @@ def get_download_opts(format_type, output_path):
             'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
             'outtmpl': output_path + '.mp4',
         }
+    
+    ydl_opts = {
+    'format': 'bestaudio/best',
+    'noplaylist': True,
+    'quiet': True,
+    'cookiefile': 'youtube_cookies.txt', # Додай цей рядок обов'язково
+}
