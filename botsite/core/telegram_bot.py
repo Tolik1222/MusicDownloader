@@ -1,7 +1,8 @@
 import telebot
-import yt_dlp
 import os
-from .downloader import get_download_opts
+import requests
+import time
+from .downloader import get_invidious_download_url
 
 def init_bot(token):
     bot = telebot.TeleBot(token)
@@ -13,26 +14,42 @@ def init_bot(token):
     @bot.message_handler(func=lambda m: True)
     def handle_link(message):
         url = message.text
-        if "soundcloud.com" not in url and "youtube.com" not in url and "youtu.be" not in url:
-            bot.reply_to(message, "Будь ласка, надішліть коректне посилання.")
+
+        if not any(domain in url for domain in ["soundcloud.com", "youtube.com", "youtu.be"]):
+            bot.reply_to(message, "Будь ласка, надішліть коректне посилання на SoundCloud або YouTube.")
             return
 
-        msg = bot.send_message(message.chat.id, "⏳ Обробка треку...")
-        file_id = f"bot_{message.chat.id}_{int(os.path.getmtime('.'))}"
-        output = os.path.join("downloads", file_id)
+        msg = bot.send_message(message.chat.id, "⏳ Обробка посилання через Cobalt...")
 
         try:
-            opts = get_download_opts('mp3', output)
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                info = ydl.extract_info(url, download=True)
-                filename = ydl.prepare_filename(info).replace('.webm', '.mp3').replace('.m4a', '.mp3')
-
-            with open(filename, 'rb') as audio:
-                bot.send_audio(message.chat.id, audio, title=info.get('title'))
+            download_link = get_invidious_download_url(url
             
-            os.remove(filename)
+            if not download_link:
+                bot.edit_message_text("❌ Не вдалося отримати файл. Спробуйте інше посилання.", 
+                                     message.chat.id, msg.message_id)
+                return
+
+            audio_data = requests.get(download_link).content
+
+            temp_filename = f"audio_{int(time.time())}.mp3"
+            
+            with open(temp_filename, "wb") as f:
+                f.write(audio_data)
+
+            with open(temp_filename, "rb") as audio:
+                bot.send_audio(
+                    message.chat.id, 
+                    audio, 
+                    caption="✅ Ваш файл готовий!"
+                )
+
+            if os.path.exists(temp_filename):
+                os.remove(temp_filename)
             bot.delete_message(message.chat.id, msg.message_id)
+
         except Exception as e:
             bot.edit_message_text(f"❌ Помилка: {str(e)}", message.chat.id, msg.message_id)
+            if 'temp_filename' in locals() and os.path.exists(temp_filename):
+                os.remove(temp_filename)
 
     return bot
