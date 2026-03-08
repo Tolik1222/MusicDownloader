@@ -9,7 +9,6 @@ app = Flask(__name__)
 app.secret_key = "super_secret_key"
 DOWNLOAD_FOLDER = "downloads"
 
-# Створюємо папку і чистимо її при старті
 if not os.path.exists(DOWNLOAD_FOLDER):
     os.makedirs(DOWNLOAD_FOLDER)
 else:
@@ -27,13 +26,17 @@ def index():
 def youtube():
     return render_template('youtube.html')
 
-@app.route('/search', methods=['POST'])
-def search():
+@app.route('/search_sc', methods=['POST'])
+def search_sc():
     query = request.form.get('query')
-    source = 'yt' if 'youtube' in request.referrer else 'sc'
-    results = search_media(query, source)
-    template = 'soundcloud.html' if source == 'sc' else 'youtube.html'
-    return render_template(template, tracks=results)
+    results = search_media(query, source='sc')
+    return render_template('soundcloud.html', tracks=results)
+
+@app.route('/search_yt', methods=['POST'])
+def search_yt():
+    query = request.form.get('query')
+    results = search_media(query, source='yt')
+    return render_template('youtube.html', tracks=results)
 
 @app.route('/download', methods=['POST'])
 def download():
