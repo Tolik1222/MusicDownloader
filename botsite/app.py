@@ -4,6 +4,7 @@ import time
 from core.downloader import search_media, get_download_opts
 from core.telegram_bot import init_bot
 import yt_dlp
+import telebot
 
 app = Flask(__name__)
 app.secret_key = "super_secret_key"
@@ -32,11 +33,23 @@ def search_sc():
     results = search_media(query, source='sc')
     return render_template('soundcloud.html', tracks=results)
 
+    try:
+        results = search_media(query, source)
+    except Exception as e:
+        print(f"Помилка пошуку SoundCloud: {e}")
+        results = []
+
 @app.route('/search_yt', methods=['POST'])
 def search_yt():
     query = request.form.get('query')
     results = search_media(query, source='yt')
     return render_template('youtube.html', tracks=results)
+
+    try:
+        results = search_media(query, source)
+    except Exception as e:
+        print(f"Помилка пошуку Youtube: {e}")
+        results = []
 
 @app.route('/download', methods=['POST'])
 def download():
