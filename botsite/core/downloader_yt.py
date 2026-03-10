@@ -37,19 +37,21 @@ def search_yt(query):
         return []
 
 def get_yt_download_url(video_url):
-    """Витягує потік через OAuth (TV клієнт)"""
+    """Витягує потік через OAuth2 (TV Client)"""
     ydl_opts = {
         'format': 'bestaudio[ext=m4a]/bestaudio/best',
-        'quiet': False,
+        'quiet': False, 
         'noplaylist': True,
+        
+        'username': 'oauth2',
+        'password': '', 
+        
         'extractor_args': {
             'youtube': {
-                'player_client': ['tv', 'android'], 
+                'player_client': ['tv'],
                 'player_skip': ['webpage', 'configs'],
             }
         },
-        'username': 'oauth2',
-        'password': '',
         'nocheckcertificate': True
     }
 
