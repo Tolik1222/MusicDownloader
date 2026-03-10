@@ -37,25 +37,19 @@ def search_yt(query):
         return []
 
 def get_yt_download_url(video_url):
-    """Витягує потік, прикидаючись додатком Android 12"""
+    """Витягує потік через OAuth (TV клієнт)"""
     ydl_opts = {
-        'format': 'bestaudio[ext=m4a]/bestaudio/best', # Беремо m4a, бо він працює без ffmpeg
-        'quiet': True,
+        'format': 'bestaudio[ext=m4a]/bestaudio/best',
+        'quiet': False,
         'noplaylist': True,
-        'cookiefile': 'cookies.txt',
         'extractor_args': {
             'youtube': {
-                'player_client': ['android', 'ios', 'web'],
+                'player_client': ['tv', 'android'], 
                 'player_skip': ['webpage', 'configs'],
             }
         },
-        'http_headers': {
-            'User-Agent': 'com.google.android.youtube/17.36.4 (Linux; U; Android 12; GB) gzip',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'en-us,en;q=0.5',
-            'Accept-Encoding': 'gzip, deflate',
-            'Sec-Fetch-Mode': 'navigate',
-        },
+        'username': 'oauth2',
+        'password': '',
         'nocheckcertificate': True
     }
 
@@ -64,9 +58,7 @@ def get_yt_download_url(video_url):
             info = ydl.extract_info(video_url, download=False)
             if 'url' in info:
                 return info['url'], "OK"
-            elif 'entries' in info and len(info['entries']) > 0:
-                return info['entries'][0].get('url'), "OK"
     except Exception as e:
-        return None, f"Помилка yt-dlp: {str(e)}"
-        
-    return None, "Не вдалося витягнути посилання"
+        return None, f"Помилка: {str(e)}"
+    
+    return None, "Не вдалося отримати посилання"
