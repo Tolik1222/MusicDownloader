@@ -1,48 +1,35 @@
 import yt_dlp
 import os
 import time
-import logging
+import zipfile
 
 DOWNLOAD_FOLDER = 'temp_downloads'
 
 def search_tracks(query, limit=6, offset=0):
-    total_to_fetch = limit + offset
+    total = limit + offset
     ydl_opts = {
         'format': 'bestaudio/best',
         'noplaylist': True,
         'quiet': True,
-        'default_search': f'scsearch{total_to_fetch}:',
-        'format_sort': ['ext:mp3', 'ext:m4a', 'acodec:mp3'],
+        'default_search': f'scsearch{total}:',
+        'format_sort': ['ext:mp3', 'ext:m4a'],
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         try:
             info = ydl.extract_info(query, download=False)
-            tracks = []
-            if 'entries' in info:
-                entries = info['entries'][offset:]
-                for entry in entries:
-                    formats = entry.get('formats', [])
-                    audio_url = entry.get('url')
-                    for f in formats:
-                        if f.get('protocol') == 'https' and f.get('ext') in ['mp3', 'm4a']:
-                            audio_url = f.get('url')
-                            break
-                    tracks.append({
-                        'title': entry.get('title'),
-                        'url': entry.get('webpage_url'),
-                        'audio_url': audio_url,
-                        'uploader': entry.get('uploader'),
-                        'duration': entry.get('duration_string'),
-                        'thumbnail': entry.get('thumbnail')
-                    })
-            return tracks
-        except Exception as e:
-            logging.error(f"Search error: {e}")
-            return []
+            entries = info.get('entries', [])[offset:]
+            return [{
+                'title': e.get('title'),
+                'url': e.get('webpage_url'),
+                'audio_url': e.get('url'),
+                'uploader': e.get('uploader'),
+                'duration': e.get('duration_string'),
+                'thumbnail': e.get('thumbnail')
+            } for e in entries]
+        except: return []
 
 def download_track(url):
-    if not os.path.exists(DOWNLOAD_FOLDER):
-        os.makedirs(DOWNLOAD_FOLDER)
+    if not os.path.exists(DOWNLOAD_FOLDER): os.makedirs(DOWNLOAD_FOLDER)
     file_path = os.path.join(DOWNLOAD_FOLDER, f"track_{int(time.time())}")
     ydl_opts = {
         'format': 'bestaudio/best',
@@ -53,6 +40,13 @@ def download_track(url):
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([url])
     return file_path + ".mp3"
+
+def create_zip(file_paths):
+    zip_path = os.path.join(DOWNLOAD_FOLDER, f"archive_{int(time.time())}.zip")
+    with zipfile.ZipFile(zip_path, 'w') as zipf:
+        for f in file_paths:
+            if os.path.exists(f): zipf.write(f, os.path.basename(f))
+    return zip_path
 
 def clear_trash():
     now = time.time()

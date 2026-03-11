@@ -47,6 +47,31 @@ def download():
     file_path = sc.download_track(url)
     return send_file(file_path, as_attachment=True, download_name=f"{title}.mp3")
 
+
+@app.route('/download_zip', methods=['POST'])
+def download_zip():
+    data = request.json
+    urls = data.get('urls', [])
+    titles = data.get('titles', [])
+    
+    if not urls:
+        return jsonify({"error": "No tracks selected"}), 400
+    
+    downloaded_files = []
+    try:
+        for url in urls:
+            file_path = sc.download_track(url)
+            downloaded_files.append(file_path)
+        
+        zip_path = sc.create_zip(downloaded_files)
+
+        for f in downloaded_files:
+            if os.path.exists(f): os.remove(f)
+            
+        return send_file(zip_path, as_attachment=True)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/' + TOKEN, methods=['POST'])
 def webhook():
     bot.process_new_updates([telebot.types.Update.de_json(request.get_data().decode('utf-8'))])
