@@ -2,16 +2,17 @@ import os
 import telebot
 from flask import Flask, render_template, request, send_file, session
 import soundcloud_service as sc
-import bot
+import bot as bot_module
 
 TOKEN = os.environ.get('TELEGRAM_TOKEN')
 HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', 'dev_key')
+app.secret_key = os.environ.get('SECRET_KEY', 'super-secret-key')
+
 bot = telebot.TeleBot(TOKEN)
 
-bot.register_handlers(bot)
+bot_module.register_handlers(bot)
 
 @app.route('/')
 def index():

@@ -33,8 +33,7 @@ def download_track(url):
     if not os.path.exists(DOWNLOAD_FOLDER):
         os.makedirs(DOWNLOAD_FOLDER)
         
-    file_id = int(time.time())
-    file_path = os.path.join(DOWNLOAD_FOLDER, f"track_{file_id}")
+    file_path = os.path.join(DOWNLOAD_FOLDER, f"track_{int(time.time())}")
     
     ydl_opts = {
         'format': 'bestaudio/best',

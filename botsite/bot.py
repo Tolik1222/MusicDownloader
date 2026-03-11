@@ -2,21 +2,27 @@ import telebot
 from telebot import types
 import soundcloud_service as sc
 
-def register_handlers(bot):
-    @bot.message_handler(commands=['start'])
+def register_handlers(bot_obj):
+    @bot_obj.message_handler(commands=['start'])
     def start(message):
-        bot.send_message(message.chat.id, "🎧 Привіт! Напиши назву треку.")
+        bot_obj.reply_to(message, "🎧 Привіт! Я ваш SoundCloud бот.\nНапиши назву пісні для пошуку.")
 
-    @bot.message_handler(func=lambda m: True)
+    @bot_obj.message_handler(func=lambda m: True)
     def handle_search(message):
-        results = sc.search_tracks(message.text, limit=5)
+        query = message.text
+        status = bot_obj.send_message(message.chat.id, "🔍 Шукаю...")
+        results = sc.search_tracks(query, limit=5)
+        
         if not results:
-            bot.send_message(message.chat.id, "Нічого не знайдено.")
+            bot_obj.edit_message_text("Нічого не знайдено.", message.chat.id, status.message_id)
             return
 
         markup = types.InlineKeyboardMarkup()
-        for idx, t in enumerate(results):
-            callback_data = f"dl_{idx}" 
-            markup.add(types.InlineKeyboardButton(f"🎵 {t['title']}", callback_data=callback_data))
+        for idx, track in enumerate(results):
+            markup.add(types.InlineKeyboardButton(f"🎵 {track['title'][:30]}", callback_data=f"info_{idx}"))
         
-        bot.send_message(message.chat.id, "Оберіть трек:", reply_markup=markup)
+        bot_obj.edit_message_text("Оберіть трек:", message.chat.id, status.message_id, reply_markup=markup)
+
+    @bot_obj.callback_query_handler(func=lambda call: call.data.startswith('info_'))
+    def callback_info(call):
+        bot_obj.answer_callback_query(call.id, "Функція завантаження в розробці...")
