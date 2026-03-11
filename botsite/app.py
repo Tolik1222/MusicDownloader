@@ -1,73 +1,90 @@
-from flask import Flask, render_template, request, redirect, Response, stream_with_context
-import os
-import time
-import requests
-import telebot
-from core.telegram_bot import init_bot
+    from flask import Flask, render_template, request, send_file, session
+    import yt_dlp
+    import os
+    import time
+    import logging
 
-app = Flask(__name__)
-app.secret_key = "super_secret_key"
-TOKEN = os.environ.get("TELEGRAM_TOKEN")
-bot = init_bot(TOKEN)
+    app = Flask(__name__)
+    app.secret_key = 'super_secret_key_for_session' # Потрібно для роботи сесій
 
-@app.route('/')
-def index(): return render_template('soundcloud.html')
+    log_path = r'errors.log'
+    logging.basicConfig(filename=log_path, level=logging.ERROR, 
+                        format='%(asctime)s - %(levelname)s - %(message)s')
 
-@app.route('/youtube')
-def youtube(): return render_template('youtube.html')
+    DOWNLOAD_FOLDER = 'temp_downloads'
+    if not os.path.exists(DOWNLOAD_FOLDER):
+        os.makedirs(DOWNLOAD_FOLDER)
 
-@app.route('/search_sc', methods=['POST'])
-def route_search_sc():
-    query = request.form.get('query')
-    from core.downloader_sc import search_sc
-    return render_template('soundcloud.html', tracks=search_sc(query))
+    def search_soundcloud(query):
+        ydl_opts = {
+            'format': 'bestaudio/best',
+            'noplaylist': True,
+            'quiet': True,
+            'default_search': 'scsearch6:', 
+        }
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            try:
+                info = ydl.extract_info(query, download=False)
+                tracks = []
+                if 'entries' in info:
+                    for entry in info['entries']:
+                        tracks.append({
+                            'title': entry.get('title'),
+                            'url': entry.get('webpage_url'),
+                            'audio_url': entry.get('url'),
+                            'uploader': entry.get('uploader'),
+                            'duration': entry.get('duration_string'),
+                            'thumbnail': entry.get('thumbnail')
+                        })
+                    return tracks
+            except Exception as e:
+                logging.error(f"Помилка пошуку: {str(e)}")
+                return []
+    @app.route('/')
+    def index():
+        history = session.get('download_history', [])
+        return render_template('index.html', history=history)
 
-@app.route('/search_yt', methods=['POST'])
-def route_search_yt():
-    query = request.form.get('query')
-    from core.downloader_yt import search_yt
-    return render_template('youtube.html', tracks=search_yt(query))
+    @app.route('/search', methods=['POST'])
+    def search():
+        query = request.form.get('query')
+        results = search_soundcloud(query)
+        history = session.get('download_history', [])
+        if results:
+            return render_template('index.html', tracks=results, history=history)
+        return render_template('index.html', error="Нічого не знайдено", history=history)
 
-@app.route('/download', methods=['POST'])
-def download():
-    url = request.form.get('url')
-    
-    if "youtube.com" in url or "youtu.be" in url:
-        from core.downloader_yt import get_yt_download_url
-        download_link, debug_info = get_yt_download_url(url)
+    @app.route('/download', methods=['POST'])
+    def download():
+        url = request.form.get('url')
+        title = request.form.get('title')
+
+        history = session.get('download_history', [])
+        if title not in history:
+            history.insert(0, title)
+            session['download_history'] = history[:5]
+
+        timestamp = int(time.time())
+        file_path = os.path.join(DOWNLOAD_FOLDER, f"track_{timestamp}")
         
-        if not download_link:
-            return f"<h3>Помилка завантаження</h3><p>{debug_info}</p>", 500
-            
-        # ПРОКСІ: Сервер Render качає аудіо і стрімить тобі.
+        ydl_opts = {
+            'format': 'bestaudio/best',
+            'outtmpl': file_path + '.%(ext)s',
+            'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': '192',
+            }],
+        }
+
         try:
-            req = requests.get(download_link, stream=True)
-            return Response(
-                stream_with_context(req.iter_content(chunk_size=8192)),
-                headers={
-                    'Content-Disposition': 'attachment; filename="youtube_track.m4a"',
-                    'Content-Type': 'audio/mp4'
-                }
-            )
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([url])
+            return send_file(file_path + ".mp3", as_attachment=True, download_name=f"{title}.mp3")
         except Exception as e:
-            return f"Помилка передачі файлу: {e}", 500
-            
-    return "Невідоме посилання або розробляється", 400
+            logging.error(f"Помилка завантаження треку '{title}' ({url}): {str(e)}")
+            return f"Помилка: {str(e)}"
 
-@app.route(f'/{TOKEN}', methods=['POST'])
-def webhook():
-    if request.headers.get('content-type') == 'application/json':
-        json_string = request.get_data().decode('utf-8')
-        update = telebot.types.Update.de_json(json_string)
-        bot.process_new_updates([update])
-        return "!", 200
-    return "Forbidden", 403
-
-if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 10000))
-    site_url = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
-    if site_url and TOKEN:
-        bot.remove_webhook()
-        time.sleep(1)
-        bot.set_webhook(url=f"https://{site_url}/{TOKEN}")
-    app.run(host='0.0.0.0', port=port)
+    if __name__ == '__main__':
+        port = int(os.environ.get("PORT", 10000))
+        app.run(host='0.0.0.0', port=port)
