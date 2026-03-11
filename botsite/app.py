@@ -9,7 +9,6 @@ HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'super-secret-key')
-
 bot = telebot.TeleBot(TOKEN)
 
 bot_module.register_handlers(bot)

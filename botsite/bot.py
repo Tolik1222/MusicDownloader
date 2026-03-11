@@ -14,7 +14,6 @@ def register_handlers(bot_obj):
     def handle_search(message):
         query = message.text
         status = bot_obj.send_message(message.chat.id, "🔍 Шукаю на SoundCloud...")
-        
         results = sc.search_tracks(query, limit=5)
         
         if not results:
@@ -22,7 +21,6 @@ def register_handlers(bot_obj):
             return
 
         search_results[message.chat.id] = results
-
         markup = types.InlineKeyboardMarkup()
         for idx, track in enumerate(results):
             markup.add(types.InlineKeyboardButton(f"🎵 {track['title'][:35]}...", callback_data=f"dl_{idx}"))
@@ -39,24 +37,16 @@ def register_handlers(bot_obj):
             return
 
         track = search_results[chat_id][idx]
-        bot_obj.answer_callback_query(call.id, f"Починаю завантаження: {track['title'][:20]}...")
-        
-        status_msg = bot_obj.send_message(chat_id, "📥 Завантажую файл на сервер, почекайте...")
+        bot_obj.answer_callback_query(call.id, f"Завантаження: {track['title'][:20]}...")
+        status_msg = bot_obj.send_message(chat_id, "📥 Завантажую файл...")
 
         try:
             file_path = sc.download_track(track['url'])
-            
             with open(file_path, 'rb') as audio:
-                bot_obj.send_audio(
-                    chat_id, 
-                    audio, 
-                    title=track['title'], 
-                    performer=track['uploader'],
-                    duration=None 
+                bot_obj.send_audio(chat_id, audio, title=track['title'], performer=track['uploader'])
             
             bot_obj.delete_message(chat_id, status_msg.message_id)
             if os.path.exists(file_path):
                 os.remove(file_path)
-
         except Exception as e:
-            bot_obj.edit_message_text(f"❌ Помилка завантаження: {e}", chat_id, status_msg.message_id)
+            bot_obj.edit_message_text(f"❌ Помилка: {e}", chat_id, status_msg.message_id)

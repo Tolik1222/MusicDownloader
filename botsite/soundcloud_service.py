@@ -10,21 +10,32 @@ def search_tracks(query, limit=6):
         'format': 'bestaudio/best',
         'noplaylist': True,
         'quiet': True,
-        'default_search': f'scsearch{limit}:', 
+        'default_search': f'scsearch{limit}:',
+        'format_sort': ['ext:mp3', 'ext:m4a', 'acodec:mp3'],
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         try:
             info = ydl.extract_info(query, download=False)
+            tracks = []
             if 'entries' in info:
-                return [{
-                    'title': e.get('title'),
-                    'url': e.get('webpage_url'),
-                    'audio_url': e.get('url'),
-                    'uploader': e.get('uploader'),
-                    'duration': e.get('duration_string'),
-                    'thumbnail': e.get('thumbnail')
-                } for e in info['entries']]
-            return []
+                for entry in info['entries']:
+                    formats = entry.get('formats', [])
+                    audio_url = entry.get('url')
+                    
+                    for f in formats:
+                        if f.get('protocol') == 'https' and f.get('ext') in ['mp3', 'm4a']:
+                            audio_url = f.get('url')
+                            break
+
+                    tracks.append({
+                        'title': entry.get('title'),
+                        'url': entry.get('webpage_url'),
+                        'audio_url': audio_url,
+                        'uploader': entry.get('uploader'),
+                        'duration': entry.get('duration_string'),
+                        'thumbnail': entry.get('thumbnail')
+                    })
+            return tracks
         except Exception as e:
             logging.error(f"SC Search Error: {e}")
             return []
