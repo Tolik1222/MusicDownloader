@@ -1,58 +1,105 @@
+import asyncio
 import yt_dlp
 import os
 import time
-import zipfile
+import re
+import platform
 
-DOWNLOAD_FOLDER = 'temp_downloads'
-
-def search_tracks(query, limit=6, offset=0):
-    total = limit + offset
+async def async_search_tracks(query, limit=5, offset=0):
+    """
+    Пошук треків з реальною роботою пагінації
+    """
+    loop = asyncio.get_running_loop()
+    
+    # Ми просимо yt-dlp знайти фіксовану кількість (наприклад, 20), 
+    # щоб користувач міг проклацати хоча б 4 сторінки без затримок.
+    max_search = 30 
+    search_query = f"scsearch{max_search}:{query}"
+    
     ydl_opts = {
-        'format': 'bestaudio/best',
-        'noplaylist': True,
         'quiet': True,
-        'default_search': f'scsearch{total}:',
-        'format_sort': ['ext:mp3', 'ext:m4a'],
+        'extract_flat': True,
+        'skip_download': True,
     }
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        try:
-            info = ydl.extract_info(query, download=False)
-            entries = info.get('entries', [])[offset:]
-            return [{
-                'title': e.get('title'),
-                'url': e.get('webpage_url'),
-                'audio_url': e.get('url'),
-                'uploader': e.get('uploader'),
-                'duration': e.get('duration_string'),
-                'thumbnail': e.get('thumbnail')
-            } for e in entries]
-        except: return []
 
-def download_track(url):
-    if not os.path.exists(DOWNLOAD_FOLDER): os.makedirs(DOWNLOAD_FOLDER)
-    file_path = os.path.join(DOWNLOAD_FOLDER, f"track_{int(time.time())}")
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = await loop.run_in_executor(
+            None, 
+            lambda: ydl.extract_info(search_query, download=False)
+        )
+        
+        results = []
+        if 'entries' in info:
+            all_entries = info['entries']
+            
+            # Ось тут ми беремо "шматочок" для поточної сторінки
+            # Якщо offset=0, беремо [0:5], якщо offset=5, беремо [5:10]
+            start = offset
+            end = offset + limit
+            page_entries = all_entries[start:end]
+            
+            for entry in page_entries:
+                results.append({
+                    'title': entry.get('title', 'Без назви'),
+                    'url': entry.get('url') or entry.get('webpage_url'),
+                    'duration': entry.get('duration'),
+                    'uploader': entry.get('uploader')
+                })
+        return results
+
+
+async def async_download_track(url, progress_callback=None):
+    if not os.path.exists('downloads'):
+        os.makedirs('downloads')
+
+    loop = asyncio.get_running_loop()
+
+    await asyncio.sleep(1.5)
+
+    def hook(d):
+        if d['status'] == 'downloading':
+            p_str = d.get('_percent_str', '0%').strip()
+            clean_p_str = re.sub(r'\x1b\[[0-9;]*m', '', p_str)
+
+            if progress_callback:
+                try:
+                    p_val = float(clean_p_str.replace('%', ''))
+                    filled = int(p_val // 10)
+                    bar = "█" * filled + "░" * (10 - filled)
+
+                    asyncio.run_coroutine_threadsafe(
+                        progress_callback(f"📥 Завантаження: `[{bar}]` {clean_p_str}"),
+                        loop
+                    )
+                except:
+                    pass
+
+    # шлях до ffmpeg
+    if platform.system() == "Windows":
+        ffmpeg_path = os.getcwd()
+    else:
+        ffmpeg_path = "/usr/bin/"
+
     ydl_opts = {
         'format': 'bestaudio/best',
-        'outtmpl': file_path + '.%(ext)s',
-        'postprocessors': [{'key': 'FFmpegExtractAudio','preferredcodec': 'mp3','preferredquality': '192'}],
+        'outtmpl': 'downloads/%(title)s.%(ext)s',
+        'ffmpeg_location': ffmpeg_path,
+        'progress_hooks': [hook],  # 🔥 важливо
+        'postprocessors': [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3',
+            'preferredquality': '192',
+        }],
         'quiet': True
     }
+
+    current_loop = asyncio.get_running_loop()
+
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        ydl.download([url])
-    return file_path + ".mp3"
+        info = await loop.run_in_executor(
+            None,
+            lambda: ydl.extract_info(url, download=True)
+        )
 
-def create_zip(file_paths):
-    zip_path = os.path.join(DOWNLOAD_FOLDER, f"archive_{int(time.time())}.zip")
-    with zipfile.ZipFile(zip_path, 'w') as zipf:
-        for f in file_paths:
-            if os.path.exists(f): zipf.write(f, os.path.basename(f))
-    return zip_path
-
-def clear_trash():
-    now = time.time()
-    if os.path.exists(DOWNLOAD_FOLDER):
-        for f in os.listdir(DOWNLOAD_FOLDER):
-            p = os.path.join(DOWNLOAD_FOLDER, f)
-            if os.path.isfile(p) and now - os.path.getmtime(p) > 900:
-                try: os.remove(p)
-                except: pass
+        filename = ydl.prepare_filename(info)
+        return filename.rsplit('.', 1)[0] + '.mp3'

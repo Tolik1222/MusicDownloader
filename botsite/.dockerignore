@@ -1,0 +1,6 @@
+__pycache__/
+*.exe
+*.db
+.env
+temp_downloads/
+downloads/

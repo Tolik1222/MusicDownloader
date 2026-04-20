@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  music_bot:
+    build: .
+    container_name: soundcloud_bot
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      - ./bot_database.db:/app/bot_database.db
+      - ./downloads:/app/downloads  
+    environment:
+      - PYTHONUNBUFFERED=1
