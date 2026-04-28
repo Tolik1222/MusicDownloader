@@ -1,105 +1,144 @@
 import asyncio
 import yt_dlp
 import os
-import time
 import re
+import glob
 import platform
+from typing import Callable, Awaitable
 
-async def async_search_tracks(query, limit=5, offset=0):
+# Прогрес-мітки, що відправляються в Telegram (лише 4 повідомлення → не спам)
+_PROGRESS_STEPS = {25: False, 50: False, 75: False, 99: False}
+
+DOWNLOADS_DIR = "downloads"
+
+
+def _ensure_downloads_dir():
+    os.makedirs(DOWNLOADS_DIR, exist_ok=True)
+
+
+def _ffmpeg_path() -> str:
+    return os.getcwd() if platform.system() == "Windows" else "/usr/bin"
+
+
+def _strip_ansi(text: str) -> str:
+    return re.sub(r'\x1b\[[0-9;]*m', '', text)
+
+
+def _bar(percent: float) -> str:
+    filled = int(percent // 10)
+    return "█" * filled + "░" * (10 - filled)
+
+
+async def async_search_tracks(
+    query: str,
+    limit: int = 5,
+    offset: int = 0,
+) -> list[dict]:
     """
-    Пошук треків з реальною роботою пагінації
+    Пошук треків через yt-dlp scsearch.
+    Завжди дістає max_search результатів і повертає потрібну сторінку.
     """
     loop = asyncio.get_running_loop()
-    
-    # Ми просимо yt-dlp знайти фіксовану кількість (наприклад, 20), 
-    # щоб користувач міг проклацати хоча б 4 сторінки без затримок.
-    max_search = 30 
-    search_query = f"scsearch{max_search}:{query}"
-    
+    max_search = max(offset + limit + 1, 30)
+
     ydl_opts = {
         'quiet': True,
         'extract_flat': True,
         'skip_download': True,
     }
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = await loop.run_in_executor(
-            None, 
-            lambda: ydl.extract_info(search_query, download=False)
-        )
-        
-        results = []
-        if 'entries' in info:
-            all_entries = info['entries']
-            
-            # Ось тут ми беремо "шматочок" для поточної сторінки
-            # Якщо offset=0, беремо [0:5], якщо offset=5, беремо [5:10]
-            start = offset
-            end = offset + limit
-            page_entries = all_entries[start:end]
-            
-            for entry in page_entries:
-                results.append({
-                    'title': entry.get('title', 'Без назви'),
-                    'url': entry.get('url') or entry.get('webpage_url'),
-                    'duration': entry.get('duration'),
-                    'uploader': entry.get('uploader')
-                })
-        return results
+    def _search():
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(f"scsearch{max_search}:{query}", download=False)
+            entries = info.get('entries', []) if info else []
+            page = entries[offset: offset + limit]
+            return [
+                {
+                    'title':    e.get('title', 'Без назви'),
+                    'url':      e.get('url') or e.get('webpage_url', ''),
+                    'duration': e.get('duration'),
+                    'uploader': e.get('uploader'),
+                }
+                for e in page
+            ]
+
+    return await loop.run_in_executor(None, _search)
 
 
-async def async_download_track(url, progress_callback=None):
-    if not os.path.exists('downloads'):
-        os.makedirs('downloads')
-
+async def async_download_track(
+    url: str,
+    progress_callback: Callable[[str], Awaitable[None]] | None = None,
+) -> str:
+    """
+    Завантажує трек та конвертує в MP3.
+    Прогрес надсилається лише на позначках 25 / 50 / 75 / 99 %,
+    щоб не отримати бан Telegram за спам.
+    Повертає абсолютний шлях до MP3-файлу.
+    """
+    _ensure_downloads_dir()
     loop = asyncio.get_running_loop()
 
-    await asyncio.sleep(1.5)
+    # Скидаємо кроки прогресу для цього завантаження
+    steps_sent: dict[int, bool] = {25: False, 50: False, 75: False, 99: False}
 
-    def hook(d):
-        if d['status'] == 'downloading':
-            p_str = d.get('_percent_str', '0%').strip()
-            clean_p_str = re.sub(r'\x1b\[[0-9;]*m', '', p_str)
+    def hook(d: dict):
+        if d['status'] != 'downloading' or progress_callback is None:
+            return
 
-            if progress_callback:
-                try:
-                    p_val = float(clean_p_str.replace('%', ''))
-                    filled = int(p_val // 10)
-                    bar = "█" * filled + "░" * (10 - filled)
+        raw = _strip_ansi(d.get('_percent_str', '0%').strip())
+        try:
+            pct = float(raw.replace('%', ''))
+        except ValueError:
+            return
 
-                    asyncio.run_coroutine_threadsafe(
-                        progress_callback(f"📥 Завантаження: `[{bar}]` {clean_p_str}"),
-                        loop
-                    )
-                except:
-                    pass
-
-    # шлях до ffmpeg
-    if platform.system() == "Windows":
-        ffmpeg_path = os.getcwd()
-    else:
-        ffmpeg_path = "/usr/bin/"
+        # Знаходимо перший ненадісланий поріг, який вже досягнуто
+        for threshold in (25, 50, 75, 99):
+            if not steps_sent[threshold] and pct >= threshold:
+                steps_sent[threshold] = True
+                bar = _bar(threshold)
+                asyncio.run_coroutine_threadsafe(
+                    progress_callback(f"📥 Завантаження: `[{bar}]` {threshold}%"),
+                    loop,
+                )
+                break  # надсилаємо лише один поріг за один виклик hook
 
     ydl_opts = {
         'format': 'bestaudio/best',
-        'outtmpl': 'downloads/%(title)s.%(ext)s',
-        'ffmpeg_location': ffmpeg_path,
-        'progress_hooks': [hook],  # 🔥 важливо
+        'outtmpl': os.path.join(DOWNLOADS_DIR, '%(id)s.%(ext)s'),  # id замість title → безпечний filename
+        'ffmpeg_location': _ffmpeg_path(),
+        'progress_hooks': [hook],
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
             'preferredquality': '192',
         }],
-        'quiet': True
+        'quiet': True,
     }
 
-    current_loop = asyncio.get_running_loop()
+    def _download():
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            track_id = info.get('id', '')
+            # Шукаємо фактичний MP3 у папці downloads/
+            matches = glob.glob(os.path.join(DOWNLOADS_DIR, f"{track_id}*.mp3"))
+            if matches:
+                return os.path.abspath(matches[0])
+            # Запасний варіант — через prepare_filename
+            raw_name = ydl.prepare_filename(info)
+            mp3_name = os.path.splitext(raw_name)[0] + '.mp3'
+            return os.path.abspath(mp3_name)
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = await loop.run_in_executor(
-            None,
-            lambda: ydl.extract_info(url, download=True)
-        )
+    return await loop.run_in_executor(None, _download)
 
-        filename = ydl.prepare_filename(info)
-        return filename.rsplit('.', 1)[0] + '.mp3'
+
+def clear_trash():
+    """Видаляє всі файли з папки downloads (викликається кожні 10 хв)."""
+    if not os.path.isdir(DOWNLOADS_DIR):
+        return
+    for f in os.listdir(DOWNLOADS_DIR):
+        full = os.path.join(DOWNLOADS_DIR, f)
+        try:
+            if os.path.isfile(full):
+                os.remove(full)
+        except OSError as e:
+            print(f"clear_trash: не вдалося видалити {full}: {e}")

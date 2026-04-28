@@ -7,8 +7,10 @@ services:
     restart: always
     env_file:
       - .env
+    ports:
+      - "10000:10000"
     volumes:
       - ./bot_database.db:/app/bot_database.db
-      - ./downloads:/app/downloads  
+      - ./downloads:/app/downloads
     environment:
       - PYTHONUNBUFFERED=1
