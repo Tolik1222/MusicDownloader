@@ -1,273 +1,223 @@
 <!DOCTYPE html>
 <html lang="uk">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SoundCloud Downloader Pro</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-    <style>
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
-        .animate-pulse-custom { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
-        .skeleton { background: #1f2937; border-radius: 1.5rem; height: 420px; width: 100%; }
-        .blob { position: fixed; width: 600px; height: 600px; border-radius: 50%; filter: blur(120px); opacity: 0.2; z-index: 0; pointer-events: none; }
-        body { background: #0b0b0d; color: white; font-family: ui-sans-serif, system-ui, sans-serif; overflow-x: hidden; }
-        
-        .nav-link { border-bottom: 2px solid transparent; transition: all 0.3s; }
-        .nav-active { border-color: #f97316 !important; color: white !important; }
-        
-        .track-card { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-        .track-card:hover { transform: translateY(-4px); border-color: rgba(249, 115, 22, 0.4); }
-        .favorite-active { color: #ef4444 !important; filter: drop-shadow(0 0 5px rgba(239, 68, 68, 0.5)); transform: scale(1.2); }
-        
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #f97316; border-radius: 10px; }
-        audio::-webkit-media-controls-panel { background-color: rgba(39, 39, 42, 0.9); }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SC Downloader</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0a0f;--surface:#13131a;--surface2:#1a1a24;
+  --border:#1e1e2e;--accent:#f97316;--accent2:#fbbf24;
+  --text:#f1f0ec;--muted:#6b6b7b;--muted2:#2e2e3e;
+}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+body::before{content:'';position:fixed;inset:0;z-index:0;
+  background-image:linear-gradient(rgba(255,255,255,.018) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,255,255,.018) 1px,transparent 1px);
+  background-size:60px 60px;pointer-events:none}
+
+/* Навігація */
+nav{position:sticky;top:0;z-index:100;
+  background:rgba(10,10,15,.88);backdrop-filter:blur(16px);
+  border-bottom:1px solid var(--border);
+  padding:0 28px;height:58px;
+  display:flex;align-items:center;justify-content:space-between}
+.nav-logo{font-family:'Syne',sans-serif;font-size:13px;font-weight:800;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--accent)}
+.nav-right{display:flex;align-items:center;gap:12px}
+.nav-user{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+.avatar{width:28px;height:28px;border-radius:50%;border:1.5px solid var(--accent);object-fit:cover}
+.avatar-ph{width:28px;height:28px;border-radius:50%;background:var(--surface2);
+  border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;
+  font-size:12px;color:var(--accent);font-weight:700}
+.btn-nav{font-size:12px;color:var(--muted);text-decoration:none;
+  padding:5px 12px;border:1px solid var(--border);border-radius:7px;transition:all .2s}
+.btn-nav:hover{border-color:var(--accent);color:var(--accent)}
+.btn-admin{font-size:12px;color:var(--accent);text-decoration:none;
+  padding:5px 12px;border:1px solid var(--accent);border-radius:7px;
+  font-weight:600;transition:all .2s}
+.btn-admin:hover{background:var(--accent);color:#000}
+
+.wrap{position:relative;z-index:1;max-width:860px;margin:0 auto;padding:44px 20px 80px}
+
+.hero{margin-bottom:40px}
+.hero h1{font-family:'Syne',sans-serif;font-size:clamp(28px,4.5vw,48px);
+  font-weight:800;line-height:1.1;
+  background:linear-gradient(135deg,#f97316,#fbbf24);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  margin-bottom:8px}
+.hero p{color:var(--muted);font-size:14px;font-weight:300}
+
+/* Пошук */
+.search-box{display:flex;gap:8px;background:var(--surface);
+  border:1px solid var(--border);border-radius:14px;padding:7px;
+  margin-bottom:36px;transition:border-color .2s}
+.search-box:focus-within{border-color:var(--accent)}
+.search-input{flex:1;background:none;border:none;outline:none;
+  color:var(--text);font-family:'DM Sans',sans-serif;font-size:15px;padding:9px 14px}
+.search-input::placeholder{color:var(--muted)}
+.btn-search{background:var(--accent);color:#000;border:none;border-radius:9px;
+  padding:10px 24px;font-size:13px;font-weight:600;cursor:pointer;
+  transition:background .2s;white-space:nowrap;font-family:'DM Sans',sans-serif}
+.btn-search:hover{background:var(--accent2)}
+
+.label{font-family:'Syne',sans-serif;font-size:10px;font-weight:600;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--muted);margin-bottom:14px}
+
+/* Музика */
+.tracks{display:flex;flex-direction:column;gap:7px;margin-bottom:44px}
+.track{background:var(--surface);border:1px solid var(--border);border-radius:11px;
+  padding:14px 18px;display:flex;align-items:center;gap:14px;
+  transition:border-color .2s,background .2s;
+  animation:up .3s ease both}
+.track:hover{border-color:rgba(249,115,22,.4);background:var(--surface2)}
+@keyframes up{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}
+.track-num{font-size:10px;color:var(--muted2);font-family:'Syne',sans-serif;min-width:18px;text-align:center}
+.track-info{flex:1;min-width:0}
+.track-title{font-size:14px;font-weight:500;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px}
+.track-meta{font-size:11px;color:var(--muted)}
+.btn-dl{background:none;border:1px solid var(--border);color:var(--text);
+  padding:7px 16px;border-radius:7px;font-size:12px;cursor:pointer;
+  transition:all .2s;white-space:nowrap;font-family:'DM Sans',sans-serif}
+.btn-dl:hover{border-color:var(--accent);color:var(--accent)}
+.btn-dl:disabled{opacity:.4;cursor:not-allowed}
+
+/* Пагінація */
+.pagination{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  margin:16px 0 32px}
+.page-info{color:var(--muted);font-size:12px}
+.btn-page{display:inline-block;background:none;border:1px solid var(--border);
+  color:var(--text);padding:7px 14px;border-radius:7px;font-size:12px;
+  text-decoration:none;transition:all .2s;white-space:nowrap;
+  font-family:'DM Sans',sans-serif}
+.btn-page:hover{border-color:var(--accent);color:var(--accent)}
+.btn-page.disabled{opacity:.4;pointer-events:none}
+
+/* Історія */
+.history-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px}
+.h-item{background:var(--surface);border:1px solid var(--border);
+  border-radius:10px;padding:13px 15px;
+  animation:up .25s ease both}
+.h-item:hover{border-color:var(--muted2)}
+.h-title{font-size:13px;font-weight:500;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:3px}
+.h-date{font-size:11px;color:var(--muted)}
+.empty{color:var(--muted);font-size:13px;font-style:italic}
+
+.dl-form{display:none}
+</style>
 </head>
 <body>
-    <div class="blob" style="background:#f97316; top:-150px; left:-150px;"></div>
-    <div class="blob" style="background:#a855f7; bottom:-150px; right:-150px;"></div>
 
-    <div class="max-w-7xl mx-auto p-4 md:p-8 relative z-10">
-        <div class="text-center mb-12">
-            <h1 class="text-6xl font-black text-orange-500 mb-4 tracking-tighter italic">SC PRO</h1>
-            <div class="flex justify-center gap-8 mb-8">
-                <button onclick="showSection('search')" id="nav-search" class="nav-link nav-active text-sm uppercase tracking-widest font-bold pb-1">Пошук</button>
-                <button onclick="showSection('favorites')" id="nav-favs" class="nav-link text-sm uppercase tracking-widest font-bold text-zinc-500 hover:text-white pb-1">Вибране ❤️</button>
-            </div>
-            
-            <div id="search-bar-container" class="w-full max-w-2xl mx-auto p-1 bg-zinc-900/50 rounded-2xl border border-zinc-800 backdrop-blur-md">
-                <form action="/search" method="POST" class="flex gap-2">
-                    <input type="text" name="query" value="{{ query }}" placeholder="Назва або посилання..." required class="flex-1 bg-transparent p-4 outline-none text-white">
-                    <button type="submit" class="bg-orange-500 hover:bg-orange-600 px-8 py-3 rounded-xl font-bold transition-all active:scale-95">Знайти</button>
-                </form>
-            </div>
-        </div>
-
-        <div id="search-section">
-            <div id="tracks-container" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-8">
-                {% for track in tracks %}
-                <div class="track-card group bg-zinc-900/40 backdrop-blur-xl border border-zinc-800/50 rounded-3xl overflow-hidden">
-                    <div class="relative aspect-square">
-                        <img src="{{ track.thumbnail or '' }}" class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-all">
-                        
-                        <button onclick="toggleFavorite(this)" 
-                                data-title="{{ track.title }}"
-                                data-url="{{ track.url }}"
-                                data-thumb="{{ track.thumbnail }}"
-                                data-up="{{ track.uploader }}"
-                                data-audio="{{ track.audio_url }}"
-                                data-dur="{{ track.duration }}"
-                                class="absolute top-4 right-4 p-3 bg-black/60 backdrop-blur-md rounded-full hover:scale-110 transition-all z-20 fav-btn">
-                            <span class="pointer-events-none">❤️</span>
-                        </button>
-                    </div>
-                    <div class="p-6">
-                        <h3 class="font-bold text-xl truncate mb-1">{{ track.title }}</h3>
-                        <p class="text-zinc-500 text-sm mb-6">{{ track.uploader }}</p>
-                        
-                        <audio controls class="w-full mb-6">
-                            <source src="{{ track.audio_url }}" type="audio/mpeg">
-                        </audio>
-
-                        <div class="flex items-center justify-between">
-                            <span class="text-xs font-mono text-zinc-600">{{ track.duration }}</span>
-                            <form action="/download" method="POST">
-                                <input type="hidden" name="url" value="{{ track.url }}">
-                                <input type="hidden" name="title" value="{{ track.title }}">
-                                <button type="submit" class="bg-white text-black px-6 py-2 rounded-xl font-bold text-sm hover:bg-orange-500 hover:text-white transition-all">Скачати</button>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-
-            {% if tracks %}
-            <div id="load-more-container" class="mt-16 text-center">
-                <button id="load-more-btn" onclick="loadMore()" class="px-12 py-4 bg-zinc-900 border border-zinc-800 rounded-2xl font-bold hover:border-orange-500 transition-all">
-                    Показати ще
-                </button>
-            </div>
-            {% endif %}
-        </div>
-
-        <div id="favorites-section" class="hidden">
-            <div class="flex flex-col md:flex-row justify-between items-center mb-10 gap-4">
-                <h2 class="text-3xl font-bold italic text-orange-500 uppercase tracking-tighter">Твоя колекція</h2>
-                <button id="zip-btn" onclick="downloadAllFavorites()" class="hidden bg-orange-500 hover:bg-orange-600 text-white px-8 py-3 rounded-xl font-bold transition-all flex items-center gap-2">
-                    📦 Завантажити все ZIP
-                </button>
-            </div>
-            <div id="favorites-container" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-8"></div>
-        </div>
+<nav>
+  <span class="nav-logo">⬡ SC DL</span>
+  <div class="nav-right">
+    {% if is_admin %}
+      <a href="/admin" class="btn-admin">⚡ Адмінка</a>
+    {% endif %}
+    <div class="nav-user">
+      {% if user.photo_url %}
+        <img src="{{ user.photo_url }}" class="avatar" alt="">
+      {% else %}
+        <div class="avatar-ph">{{ user.first_name[0]|upper }}</div>
+      {% endif %}
+      <span>{{ user.first_name }}</span>
     </div>
+    <a href="/logout" class="btn-nav">Вийти</a>
+  </div>
+</nav>
 
-    <script>
-        let currentOffset = 6;
-        const searchQuery = "{{ query }}";
+<div class="wrap">
+  <div class="hero">
+    <h1>Знайди трек.<br>Скачай зараз.</h1>
+    <p>SoundCloud · MP3 192kbps · Миттєво</p>
+  </div>
 
-        function showSection(name) {
-            document.getElementById('search-section').classList.toggle('hidden', name !== 'search');
-            document.getElementById('favorites-section').classList.toggle('hidden', name !== 'favorites');
-            
-            const navSearch = document.getElementById('nav-search');
-            const navFavs = document.getElementById('nav-favs');
-            
-            if (name === 'search') {
-                navSearch.classList.add('nav-active');
-                navFavs.classList.remove('nav-active');
-            } else {
-                navFavs.classList.add('nav-active');
-                navSearch.classList.remove('nav-active');
-                renderFavorites();
-            }
-        }
+  <form class="search-box" method="GET" action="/search">
+    <input class="search-input" type="text" name="query"
+      placeholder="Назва треку або артист..."
+      value="{{ query or '' }}" autofocus>
+    <button class="btn-search" type="submit">Шукати</button>
+  </form>
 
-        function toggleFavorite(btn) {
-            const track = {
-                title: btn.getAttribute('data-title'),
-                url: btn.getAttribute('data-url'),
-                thumbnail: btn.getAttribute('data-thumb'),
-                uploader: btn.getAttribute('data-up'),
-                audio_url: btn.getAttribute('data-audio'),
-                duration: btn.getAttribute('data-dur')
-            };
+  {% if tracks %}
+  <div class="label">Результати — {{ tracks|length }} треків</div>
+  <div class="tracks">
+    {% for t in tracks %}
+    <div class="track" data-delay="{{ loop.index0 * 0.04 }}">
+      <span class="track-num">{{ loop.index }}</span>
+      <div class="track-info">
+        <div class="track-title">{{ t.title }}</div>
+        <div class="track-meta">
+          {% if t.uploader %}{{ t.uploader }} · {% endif %}
+          {% if t.duration %}{{ t.duration // 60 }}:{{ '%02d' % (t.duration % 60) }}{% endif %}
+        </div>
+      </div>
+      <button class="btn-dl" onclick="dlTrack(this,'{{ t.url|e }}','{{ t.title|e }}')">↓ Скачати</button>
+    </div>
+    {% endfor %}
+  </div>
 
-            let favs = JSON.parse(localStorage.getItem('favs') || '[]');
-            const index = favs.findIndex(f => f.url === track.url);
-            
-            if (index === -1) {
-                favs.push(track);
-                btn.classList.add('favorite-active');
-            } else {
-                favs.splice(index, 1);
-                btn.classList.remove('favorite-active');
-            }
-            
-            localStorage.setItem('favs', JSON.stringify(favs));
-            if (!document.getElementById('favorites-section').classList.contains('hidden')) renderFavorites();
-        }
+  <div class="pagination">
+    {% if has_prev %}
+      <a class="btn-page" href="/search?query={{ query|urlencode }}&page={{ page - 1 }}">← Попередня</a>
+    {% else %}
+      <span class="btn-page disabled">← Попередня</span>
+    {% endif %}
 
-        function renderFavorites() {
-            const container = document.getElementById('favorites-container');
-            const zipBtn = document.getElementById('zip-btn');
-            const favs = JSON.parse(localStorage.getItem('favs') || '[]');
-            
-            if (favs.length > 0) {
-                container.innerHTML = favs.map(t => renderTrackCard(t)).join('');
-                zipBtn.classList.remove('hidden');
-                initHls();
-            } else {
-                container.innerHTML = '<p class="col-span-full text-center text-zinc-500 py-20">Тут поки нічого немає ❤️</p>';
-                zipBtn.classList.add('hidden');
-            }
-        }
+    <div class="page-info">Сторінка {{ page|default(1) }}</div>
 
-        function renderTrackCard(t) {
-            const favs = JSON.parse(localStorage.getItem('favs') || '[]');
-            const isFav = favs.some(f => f.url === t.url) ? 'favorite-active' : '';
-            
-            return `
-            <div class="track-card group bg-zinc-900/40 backdrop-blur-xl border border-zinc-800/50 rounded-3xl overflow-hidden">
-                <div class="relative aspect-square">
-                    <img src="${t.thumbnail || ''}" class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-all">
-                    <button onclick="toggleFavorite(this)" 
-                            data-title="${t.title}" data-url="${t.url}" data-thumb="${t.thumbnail}" 
-                            data-up="${t.uploader}" data-audio="${t.audio_url}" data-dur="${t.duration}"
-                            class="absolute top-4 right-4 p-3 bg-black/60 backdrop-blur-md rounded-full hover:scale-110 transition-all z-20 fav-btn ${isFav}">
-                        <span class="pointer-events-none">❤️</span>
-                    </button>
-                </div>
-                <div class="p-6">
-                    <h3 class="font-bold text-xl truncate mb-1">${t.title}</h3>
-                    <p class="text-zinc-500 text-sm mb-6">${t.uploader}</p>
-                    <audio controls class="w-full mb-6"><source src="${t.audio_url}" type="audio/mpeg"></audio>
-                    <div class="flex items-center justify-between">
-                        <span class="text-xs font-mono text-zinc-600">${t.duration}</span>
-                        <form action="/download" method="POST">
-                            <input type="hidden" name="url" value="${t.url}"><input type="hidden" name="title" value="${t.title}">
-                            <button type="submit" class="bg-white text-black px-6 py-2 rounded-xl font-bold text-sm hover:bg-orange-500 hover:text-white transition-all">Скачати</button>
-                        </form>
-                    </div>
-                </div>
-            </div>`;
-        }
+    {% if has_next %}
+      <a class="btn-page" href="/search?query={{ query|urlencode }}&page={{ page + 1 }}">Далі →</a>
+    {% else %}
+      <span class="btn-page disabled">Далі →</span>
+    {% endif %}
+  </div>
+  {% endif %}
 
-        async function loadMore() {
-            const container = document.getElementById('tracks-container');
-            const btn = document.getElementById('load-more-btn');
-            let skeletons = '<div class="skeleton animate-pulse-custom"></div>'.repeat(3);
-            
-            container.insertAdjacentHTML('beforeend', skeletons);
-            btn.classList.add('hidden');
+  <div class="label">Ваша історія</div>
+  {% if history %}
+  <div class="history-grid">
+    {% for item in history %}
+    <div class="h-item" data-delay="{{ loop.index0 * 0.03 }}">
+      <div class="h-title">{{ item.track_title }}</div>
+      <div class="h-date">{{ item.download_date[:16] if item.download_date else '' }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="empty">Ще нічого не скачано. Спробуй пошук ↑</p>
+  {% endif %}
+</div>
 
-            try {
-                const res = await fetch('/search_more', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ query: searchQuery, offset: currentOffset })
-                });
-                const data = await res.json();
-                document.querySelectorAll('.skeleton').forEach(s => s.remove());
+<form class="dl-form" id="dlf" method="POST" action="/download">
+  <input type="hidden" name="url"   id="dl-url">
+  <input type="hidden" name="title" id="dl-title">
+</form>
 
-                if (data.tracks.length > 0) {
-                    data.tracks.forEach(t => container.insertAdjacentHTML('beforeend', renderTrackCard(t)));
-                    currentOffset += data.tracks.length;
-                    btn.classList.remove('hidden');
-                    initHls();
-                } else { btn.remove(); }
-            } catch (e) { console.error(e); }
-        }
+<script>
+function dlTrack(btn, url, title) {
+  btn.disabled = true;
+  btn.textContent = '⏳ Готується...';
+  document.getElementById('dl-url').value   = url;
+  document.getElementById('dl-title').value = title;
+  document.getElementById('dlf').submit();
+  setTimeout(() => { btn.disabled = false; btn.textContent = '↓ Скачати'; }, 10000);
+}
 
-        async function downloadAllFavorites() {
-            const favs = JSON.parse(localStorage.getItem('favs') || '[]');
-            const btn = document.getElementById('zip-btn');
-            const original = btn.innerHTML;
-            btn.innerHTML = "⏳ Пакуємо...";
-            btn.disabled = true;
-
-            try {
-                const res = await fetch('/download_zip', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ urls: favs.map(f => f.url), titles: favs.map(f => f.title) })
-                });
-                if (res.ok) {
-                    const blob = await res.blob();
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement("a");
-                    a.href = url; a.download = "SC_Archive.zip"; a.click();
-                }
-            } finally {
-                btn.innerHTML = original; btn.disabled = false;
-            }
-        }
-
-        function initHls() {
-            document.querySelectorAll('audio').forEach(audio => {
-                const source = audio.querySelector('source').src;
-                if (source.includes('.m3u8') && Hls.isSupported()) {
-                    const hls = new Hls(); hls.loadSource(source); hls.attachMedia(audio);
-                }
-            });
-        }
-
-        // Авто-ініціалізація стану сердечок при завантаженні сторінки
-        window.addEventListener('DOMContentLoaded', () => {
-            const favs = JSON.parse(localStorage.getItem('favs') || '[]');
-            document.querySelectorAll('.fav-btn').forEach(btn => {
-                const url = btn.getAttribute('data-url');
-                if (favs.some(f => f.url === url)) btn.classList.add('favorite-active');
-            });
-            initHls();
-        });
-
-        document.addEventListener('play', e => {
-            const audios = document.getElementsByTagName('audio');
-            for(let a of audios) { if(a !== e.target) a.pause(); }
-        }, true);
-    </script>
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('[data-delay]').forEach((el) => {
+    const raw = el.getAttribute('data-delay');
+    const value = raw ? Number.parseFloat(raw) : NaN;
+    if (!Number.isNaN(value)) {
+      el.style.animationDelay = `${value}s`;
+    }
+  });
+});
+</script>
 </body>
 </html>

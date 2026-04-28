@@ -17,9 +17,8 @@ ADMIN_IDS: list[int] = [
 ]
 
 
-# ---------------------------------------------------------------------------
-# Простий LRU-кеш для результатів пошуку (макс. 200 записів → без витоку пам'яті)
-# ---------------------------------------------------------------------------
+# Простий LRU-кеш для результатів пошуку
+
 class _LRUCache(OrderedDict):
     def __init__(self, maxsize: int = 200):
         super().__init__()
@@ -35,9 +34,7 @@ class _LRUCache(OrderedDict):
 search_results: _LRUCache = _LRUCache(maxsize=200)
 
 
-# ---------------------------------------------------------------------------
 # Команди
-# ---------------------------------------------------------------------------
 
 @router.message(Command("start"))
 async def cmd_start(message: types.Message):
@@ -65,9 +62,7 @@ async def cmd_stats(message: types.Message):
     )
 
 
-# ---------------------------------------------------------------------------
 # Пошук та пагінація
-# ---------------------------------------------------------------------------
 
 def _build_results_markup(results: list[dict], query: str, offset: int) -> types.InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
@@ -134,7 +129,6 @@ async def handle_text(message: types.Message):
 
 @router.callback_query(F.data.startswith("page_"))
 async def cb_pagination(call: types.CallbackQuery):
-    # формат: page_<query>_<offset>
     parts = call.data.split("_")
     offset = int(parts[-1])
     query = "_".join(parts[1:-1])
@@ -142,9 +136,7 @@ async def cb_pagination(call: types.CallbackQuery):
     await send_search_results(call, query, offset)
 
 
-# ---------------------------------------------------------------------------
 # Завантаження
-# ---------------------------------------------------------------------------
 
 async def _safe_edit(msg: types.Message, text: str):
     """Редагує повідомлення, ігноруючи помилку 'message not modified'."""

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SC Downloader — Вхід</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0a0f;--surface:#13131a;--border:#1e1e2e;
+  --accent:#f97316;--text:#f1f0ec;--muted:#6b6b7b;
+}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);
+  min-height:100vh;display:flex;align-items:center;justify-content:center;overflow:hidden}
+
+/* Grid */
+body::before{content:'';position:fixed;inset:0;
+  background-image:linear-gradient(rgba(255,255,255,.02) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,255,255,.02) 1px,transparent 1px);
+  background-size:60px 60px;pointer-events:none}
+
+/* Blob */
+.blob{position:fixed;border-radius:50%;filter:blur(90px);opacity:.1;pointer-events:none;animation:drift 10s ease-in-out infinite}
+.blob-1{width:500px;height:500px;background:#f97316;top:-150px;left:-100px}
+.blob-2{width:400px;height:400px;background:#a855f7;bottom:-100px;right:-80px;animation-delay:4s}
+@keyframes drift{0%,100%{transform:translateY(0)}50%{transform:translateY(-25px)}}
+
+.card{
+  position:relative;z-index:1;
+  background:rgba(19,19,26,.9);
+  border:1px solid var(--border);
+  border-radius:24px;padding:52px 44px;
+  width:100%;max-width:420px;text-align:center;
+  box-shadow:0 0 80px rgba(249,115,22,.07),0 32px 64px rgba(0,0,0,.5);
+}
+
+.logo{font-family:'Syne',sans-serif;font-size:11px;font-weight:600;
+  letter-spacing:.22em;text-transform:uppercase;color:var(--accent);
+  margin-bottom:28px;display:flex;align-items:center;justify-content:center;gap:8px}
+.dot{width:6px;height:6px;background:var(--accent);border-radius:50%}
+
+/* Еквалайзер */
+.eq{display:flex;gap:3px;align-items:flex-end;height:22px;margin:0 auto 24px;width:fit-content}
+.eq-bar{width:3px;background:var(--accent);border-radius:2px;animation:eq 1.3s ease-in-out infinite}
+.eq-bar:nth-child(1){height:8px;animation-delay:0s}
+.eq-bar:nth-child(2){height:16px;animation-delay:.15s}
+.eq-bar:nth-child(3){height:22px;animation-delay:.3s}
+.eq-bar:nth-child(4){height:12px;animation-delay:.45s}
+.eq-bar:nth-child(5){height:18px;animation-delay:.6s}
+@keyframes eq{0%,100%{transform:scaleY(.35);opacity:.45}50%{transform:scaleY(1);opacity:1}}
+
+h1{font-family:'Syne',sans-serif;font-size:38px;font-weight:800;line-height:1.1;
+  margin-bottom:10px;
+  background:linear-gradient(135deg,#f97316,#fbbf24);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.sub{color:var(--muted);font-size:14px;font-weight:300;line-height:1.7;margin-bottom:36px}
+
+.divider{display:flex;align-items:center;gap:14px;margin-bottom:28px;
+  color:var(--muted);font-size:11px;letter-spacing:.12em;text-transform:uppercase}
+.divider::before,.divider::after{content:'';flex:1;height:1px;background:var(--border)}
+
+.tg-wrap{display:flex;justify-content:center;margin-bottom:28px}
+
+.note{font-size:11px;color:var(--muted);line-height:1.7}
+.note a{color:var(--accent);text-decoration:none}
+.note a:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+<div class="blob blob-1"></div>
+<div class="blob blob-2"></div>
+
+<div class="card">
+  <div class="logo"><div class="dot"></div>SoundCloud DL<div class="dot"></div></div>
+  <div class="eq">
+    <div class="eq-bar"></div><div class="eq-bar"></div><div class="eq-bar"></div>
+    <div class="eq-bar"></div><div class="eq-bar"></div>
+  </div>
+  <h1>Зайди.<br>Знайди.<br>Завантаж.</h1>
+  <p class="sub">Завантажуй треки з SoundCloud<br>прямо в браузері або через бота.</p>
+  <div class="divider">увійти через</div>
+  <div class="tg-wrap">
+    <script type="module" src="https://telegram.org/js/telegram-widget.js?22"
+      data-telegram-login="{{ bot_username }}"
+      data-size="large"
+      data-auth-url="{{ auth_url }}"
+      data-request-access="write">
+    </script>
+  </div>
+  <p class="note">Дані захищені підписом Telegram.<br>
+    Потрібен <a href="https://telegram.org/" target="_blank">Telegram</a> для входу.</p>
+</div>
+</body>
+</html>

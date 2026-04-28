@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SC Admin Panel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0b0b0d;--s1:#111114;--s2:#18181c;--s3:#1f1f25;
+  --border:#27272f;--accent:#f97316;--accent2:#fbbf24;
+  --text:#f0eff0;--muted:#5a5a6a;--muted2:#2a2a34;
+  --red:#ef4444;--green:#22c55e;
+}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+body::before{content:'';position:fixed;inset:0;z-index:0;
+  background-image:linear-gradient(rgba(255,255,255,.015) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,255,255,.015) 1px,transparent 1px);
+  background-size:60px 60px;pointer-events:none}
+
+/* Blob */
+.blob{position:fixed;border-radius:50%;filter:blur(110px);opacity:.08;pointer-events:none}
+.blob-1{width:600px;height:600px;background:#f97316;top:-200px;right:-150px}
+.blob-2{width:500px;height:500px;background:#a855f7;bottom:-150px;left:-100px}
+
+/* Навігація */
+nav{position:sticky;top:0;z-index:100;
+  background:rgba(11,11,13,.9);backdrop-filter:blur(16px);
+  border-bottom:1px solid var(--border);
+  padding:0 32px;height:58px;
+  display:flex;align-items:center;justify-content:space-between}
+.nav-logo{font-family:'Syne',sans-serif;font-size:13px;font-weight:800;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+.nav-badge{background:rgba(249,115,22,.15);color:var(--accent);
+  font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+  padding:3px 8px;border-radius:4px;margin-left:10px;border:1px solid rgba(249,115,22,.25)}
+.nav-right{display:flex;align-items:center;gap:12px}
+.nav-user{font-size:13px;color:var(--muted)}
+.btn-nav{font-size:12px;color:var(--muted);text-decoration:none;
+  padding:5px 14px;border:1px solid var(--border);border-radius:7px;transition:all .2s}
+.btn-nav:hover{border-color:var(--accent);color:var(--accent)}
+
+.wrap{position:relative;z-index:1;max-width:1200px;margin:0 auto;padding:40px 24px 80px}
+
+.sec-hd{font-family:'Syne',sans-serif;font-size:10px;font-weight:600;
+  letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:16px}
+
+/* Тітулка */
+.page-title{font-family:'Syne',sans-serif;font-size:clamp(28px,4vw,42px);
+  font-weight:800;line-height:1;margin-bottom:6px;
+  background:linear-gradient(135deg,#f97316,#fbbf24);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.page-sub{font-size:13px;color:var(--muted);margin-bottom:40px}
+
+/* Статік */
+.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:36px}
+.stat-card{background:var(--s1);border:1px solid var(--border);border-radius:14px;padding:22px 24px;
+  position:relative;overflow:hidden;transition:border-color .2s}
+.stat-card:hover{border-color:rgba(249,115,22,.35)}
+.stat-card::before{content:'';position:absolute;inset:0;
+  background:linear-gradient(135deg,rgba(249,115,22,.04),transparent);pointer-events:none}
+.stat-label{font-size:10px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--muted);margin-bottom:10px}
+.stat-val{font-family:'Syne',sans-serif;font-size:32px;font-weight:800;line-height:1}
+.stat-val.orange{color:var(--accent)}
+.stat-val.green{color:var(--green)}
+
+/* Таблички */
+.tabs{display:flex;gap:4px;background:var(--s1);border:1px solid var(--border);
+  border-radius:12px;padding:5px;margin-bottom:28px;width:fit-content}
+.tab{padding:8px 20px;border-radius:8px;font-size:13px;font-weight:500;
+  cursor:pointer;transition:all .2s;color:var(--muted);border:none;background:none;
+  font-family:'DM Sans',sans-serif}
+.tab.active{background:var(--accent);color:#000;font-weight:600}
+.tab:hover:not(.active){color:var(--text)}
+.tab-panel{display:none}
+.tab-panel.active{display:block}
+
+/* Топ чартів */
+.charts-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:36px}
+@media(max-width:700px){.charts-row{grid-template-columns:1fr}}
+.chart-card{background:var(--s1);border:1px solid var(--border);
+  border-radius:14px;padding:20px 22px}
+.chart-title{font-family:'Syne',sans-serif;font-size:11px;font-weight:600;
+  letter-spacing:.15em;text-transform:uppercase;color:var(--muted);margin-bottom:18px}
+.chart-wrap{position:relative;height:200px}
+
+/* Топ треків */
+.top-list{display:flex;flex-direction:column;gap:6px}
+.top-item{display:flex;align-items:center;gap:12px;
+  background:var(--s2);border:1px solid var(--border);
+  border-radius:9px;padding:10px 14px;transition:border-color .2s}
+.top-item:hover{border-color:var(--muted2)}
+.top-rank{font-family:'Syne',sans-serif;font-size:11px;color:var(--muted);min-width:20px}
+.top-title{flex:1;font-size:13px;font-weight:500;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.top-count{font-size:12px;color:var(--accent);font-weight:600}
+
+/* Ще таблички */
+.tbl-wrap{background:var(--s1);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+.tbl-header{padding:16px 20px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,.02)}
+.tbl-title{font-family:'Syne',sans-serif;font-size:12px;font-weight:700;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--text)}
+.tbl-count{font-size:11px;color:var(--muted)}
+.tbl-scroll{overflow-x:auto;max-height:500px;overflow-y:auto}
+table{width:100%;border-collapse:collapse}
+thead th{padding:10px 16px;text-align:left;font-size:10px;font-weight:600;
+  letter-spacing:.15em;text-transform:uppercase;color:var(--muted);
+  background:var(--s2);position:sticky;top:0;z-index:1;border-bottom:1px solid var(--border)}
+tbody tr{border-bottom:1px solid rgba(39,39,47,.6);transition:background .15s}
+tbody tr:hover{background:rgba(255,255,255,.025)}
+tbody td{padding:11px 16px;font-size:13px;vertical-align:middle}
+.td-id{font-family:monospace;font-size:11px;color:var(--muted)}
+.td-name{font-weight:500}
+.td-user{font-size:12px;color:var(--muted)}
+.td-date{font-size:11px;color:var(--muted)}
+.td-link a{color:var(--accent);text-decoration:none;font-size:12px}
+.td-link a:hover{text-decoration:underline}
+.btn-del{background:none;border:1px solid rgba(239,68,68,.3);color:var(--red);
+  padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer;
+  transition:all .2s;font-family:'DM Sans',sans-serif}
+.btn-del:hover{background:rgba(239,68,68,.15);border-color:var(--red)}
+
+/* Таблички користувачів */
+.user-badge{display:inline-flex;align-items:center;gap:6px;
+  background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.2);
+  color:var(--accent);font-size:11px;padding:3px 9px;border-radius:20px}
+.dl-count{font-family:'Syne',sans-serif;font-weight:700;color:var(--accent)}
+
+/* Нічого */
+.empty{padding:48px;text-align:center;color:var(--muted);font-size:14px;font-style:italic}
+
+/* Фільтр пошуку */
+.filter-input{background:var(--s2);border:1px solid var(--border);color:var(--text);
+  padding:7px 14px;border-radius:8px;font-size:13px;outline:none;width:220px;
+  font-family:'DM Sans',sans-serif;transition:border-color .2s}
+.filter-input:focus{border-color:rgba(249,115,22,.5)}
+.filter-input::placeholder{color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="blob blob-1"></div>
+<div class="blob blob-2"></div>
+
+<nav>
+  <div style="display:flex;align-items:center">
+    <span class="nav-logo">⬡ SC DL</span>
+    <span class="nav-badge">Admin</span>
+  </div>
+  <div class="nav-right">
+    <span class="nav-user">{{ user.first_name }}</span>
+    <a href="/" class="btn-nav">🏠 На сайт</a>
+    <a href="/logout" class="btn-nav">Вийти</a>
+  </div>
+</nav>
+
+<div class="wrap">
+  <div class="page-title">Admin Panel</div>
+  <div class="page-sub">Статистика та керування MusicDownloader</div>
+
+  <!-- Статік класс -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-label">Всього завантажень</div>
+      <div class="stat-val orange">{{ stats.downloads }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Користувачів</div>
+      <div class="stat-val">{{ stats.users }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">За останні 30 днів</div>
+      <div class="stat-val">{{ by_day | sum(attribute='count') }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Статус БД</div>
+      <div class="stat-val green">ONLINE</div>
+    </div>
+  </div>
+
+  <!-- Таблички класс -->
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('analytics',this)">📈 Аналітика</button>
+    <button class="tab" onclick="switchTab('downloads',this)">🎵 Завантаження</button>
+    <button class="tab" onclick="switchTab('users',this)">👥 Користувачі</button>
+  </div>
+
+  <!-- Аналітика класс -->
+  <div class="tab-panel active" id="tab-analytics">
+    <div class="charts-row">
+      <div class="chart-card">
+        <div class="chart-title">Завантаження по днях (30д)</div>
+        <div class="chart-wrap"><canvas id="chartDays"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Нові користувачі (30д)</div>
+        <div class="chart-wrap"><canvas id="chartUsers"></canvas></div>
+      </div>
+    </div>
+    <div class="sec-hd">Топ-10 треків</div>
+    <div class="top-list">
+      {% for t in top_tracks %}
+      <div class="top-item">
+        <span class="top-rank">#{{ loop.index }}</span>
+        <span class="top-title">{{ t.track_title }}</span>
+        <span class="top-count">{{ t.count }}×</span>
+      </div>
+      {% else %}
+      <div class="empty">Ще немає даних</div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Завантажки класс -->
+  <div class="tab-panel" id="tab-downloads">
+    <div class="tbl-wrap">
+      <div class="tbl-header">
+        <span class="tbl-title">Всі завантаження</span>
+        <div style="display:flex;align-items:center;gap:12px">
+          <span class="tbl-count">{{ all_downloads|length }} записів</span>
+          <input class="filter-input" type="text" placeholder="Фільтр..." oninput="filterTable(this,'tbl-dl')">
+        </div>
+      </div>
+      <div class="tbl-scroll">
+        <table id="tbl-dl">
+          <thead>
+            <tr>
+              <th>ID</th><th>Юзер</th><th>Трек</th><th>Дата</th><th>Посилання</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for d in all_downloads %}
+            <tr id="row-{{ d.id }}">
+              <td class="td-id">{{ d.id }}</td>
+              <td class="td-user">
+                {% if d.user_id and d.user_id != 0 %}
+                  <div style="font-weight:500">{{ d.display_name }}</div>
+                  <div style="font-size:10px;color:var(--muted)">id: {{ d.user_id }}</div>
+                {% else %}
+                  <span style="color:var(--muted)">Web</span>
+                {% endif %}
+              </td>
+              <td class="td-name">{{ d.track_title }}</td>
+              <td class="td-date">{{ d.download_date[:16] if d.download_date else '—' }}</td>
+              <td class="td-link"><a href="{{ d.track_url }}" target="_blank">Link ↗</a></td>
+              <td><button class="btn-del" type="button" data-id="{{ d.id }}">✕</button></td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6" class="empty">Ще немає завантажень</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Користувачі табличка класс -->
+  <div class="tab-panel" id="tab-users">
+    <div class="tbl-wrap">
+      <div class="tbl-header">
+        <span class="tbl-title">Користувачі</span>
+        <div style="display:flex;align-items:center;gap:12px">
+          <span class="tbl-count">{{ all_users|length }} юзерів</span>
+          <input class="filter-input" type="text" placeholder="Фільтр..." oninput="filterTable(this,'tbl-users')">
+        </div>
+      </div>
+      <div class="tbl-scroll">
+        <table id="tbl-users">
+          <thead>
+            <tr><th>ID</th><th>Ім'я</th><th>Username</th><th>Реєстрація</th><th>Завантажень</th></tr>
+          </thead>
+          <tbody>
+            {% for u in all_users %}
+            <tr>
+              <td class="td-id">{{ u.user_id }}</td>
+              <td class="td-name">{{ u.first_name or '—' }}</td>
+              <td class="td-user">{% if u.username %}<span class="user-badge">@{{ u.username }}</span>{% else %}—{% endif %}</td>
+              <td class="td-date">{{ u.join_date[:10] if u.join_date else '—' }}</td>
+              <td><span class="dl-count">{{ u.downloads }}</span></td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5" class="empty">Ще немає користувачів</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script id="by-day-data" type="application/json">{{ by_day | tojson }}</script>
+<script id="new-users-data" type="application/json">{{ new_users | tojson }}</script>
+
+<script>
+//  Ще табличка
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+}
+
+//  Фільтр конст
+function filterTable(input, tableId) {
+  const q = input.value.toLowerCase();
+  document.querySelectorAll('#' + tableId + ' tbody tr').forEach(row => {
+    row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+
+//  Видалення конст
+async function delRecord(id) {
+  if (!confirm('Видалити запис #' + id + '?')) return;
+  const res = await fetch('/admin/delete/' + id, { method: 'POST' });
+  if (res.ok) {
+    const row = document.getElementById('row-' + id);
+    row.style.opacity = '0';
+    row.style.transition = 'opacity .3s';
+    setTimeout(() => row.remove(), 300);
+  }
+}
+
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.btn-del');
+  if (!btn) return;
+  const id = btn.dataset.id;
+  if (!id) return;
+  delRecord(id);
+});
+
+//  Чарти конст 
+const chartDefaults = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: { legend: { display: false } },
+  scales: {
+    x: { ticks: { color: '#5a5a6a', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,.04)' } },
+    y: { ticks: { color: '#5a5a6a', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,.04)' }, beginAtZero: true }
+  }
+};
+
+// Завантажки дня конст
+const byDay = JSON.parse(document.getElementById('by-day-data').textContent);
+new Chart(document.getElementById('chartDays'), {
+  type: 'bar',
+  data: {
+    labels:   byDay.map(d => d.day.slice(5)),
+    datasets: [{
+      data:            byDay.map(d => d.count),
+      backgroundColor: 'rgba(249,115,22,.55)',
+      borderColor:     '#f97316',
+      borderWidth:     1,
+      borderRadius:    4,
+    }]
+  },
+  options: chartDefaults,
+});
+
+// Нові користувачі конст
+const newUsers = JSON.parse(document.getElementById('new-users-data').textContent);
+new Chart(document.getElementById('chartUsers'), {
+  type: 'line',
+  data: {
+    labels:   newUsers.map(d => d.day.slice(5)),
+    datasets: [{
+      data:        newUsers.map(d => d.count),
+      borderColor: '#fbbf24',
+      backgroundColor: 'rgba(251,191,36,.12)',
+      borderWidth: 2,
+      pointRadius: 3,
+      pointBackgroundColor: '#fbbf24',
+      fill: true,
+      tension: 0.4,
+    }]
+  },
+  options: chartDefaults,
+});
+</script>
+</body>
+</html>

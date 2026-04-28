@@ -6,7 +6,7 @@ import glob
 import platform
 from typing import Callable, Awaitable
 
-# Прогрес-мітки, що відправляються в Telegram (лише 4 повідомлення → не спам)
+# Прогрес-мітки, що відправляються в Telegram
 _PROGRESS_STEPS = {25: False, 50: False, 75: False, 99: False}
 
 DOWNLOADS_DIR = "downloads"
@@ -78,7 +78,6 @@ async def async_download_track(
     _ensure_downloads_dir()
     loop = asyncio.get_running_loop()
 
-    # Скидаємо кроки прогресу для цього завантаження
     steps_sent: dict[int, bool] = {25: False, 50: False, 75: False, 99: False}
 
     def hook(d: dict):
@@ -91,7 +90,6 @@ async def async_download_track(
         except ValueError:
             return
 
-        # Знаходимо перший ненадісланий поріг, який вже досягнуто
         for threshold in (25, 50, 75, 99):
             if not steps_sent[threshold] and pct >= threshold:
                 steps_sent[threshold] = True
@@ -100,7 +98,7 @@ async def async_download_track(
                     progress_callback(f"📥 Завантаження: `[{bar}]` {threshold}%"),
                     loop,
                 )
-                break  # надсилаємо лише один поріг за один виклик hook
+                break
 
     ydl_opts = {
         'format': 'bestaudio/best',
@@ -119,11 +117,9 @@ async def async_download_track(
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             track_id = info.get('id', '')
-            # Шукаємо фактичний MP3 у папці downloads/
             matches = glob.glob(os.path.join(DOWNLOADS_DIR, f"{track_id}*.mp3"))
             if matches:
                 return os.path.abspath(matches[0])
-            # Запасний варіант — через prepare_filename
             raw_name = ydl.prepare_filename(info)
             mp3_name = os.path.splitext(raw_name)[0] + '.mp3'
             return os.path.abspath(mp3_name)
