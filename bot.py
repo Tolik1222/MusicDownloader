@@ -17,7 +17,6 @@ ADMIN_IDS: list[int] = [
 ]
 
 
-# Простий LRU-кеш для результатів пошуку
 
 class _LRUCache(OrderedDict):
     def __init__(self, maxsize: int = 200):
