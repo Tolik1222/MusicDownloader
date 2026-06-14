@@ -339,23 +339,32 @@ async def masterchef_download():
       для перевірки заголовків, дозавантаження або при повторних спробах.
     """
     if request.method == 'POST':
-        form    = await request.form
-        stb_url = form.get('url', '')
+        form        = await request.form
+        stb_url     = form.get('url', '')
+        player_hash = form.get('hash', '')
+        title       = form.get('title', '')
     else:
-        stb_url = request.args.get('url', '')
+        stb_url     = request.args.get('url', '')
+        player_hash = request.args.get('hash', '')
+        title       = request.args.get('title', '')
 
     user = current_user()
 
-    if not stb_url or not stb.is_stb_url(stb_url):
-        return "Невірне посилання STB", 400
+    if player_hash:
+        try:
+            info = await stb.async_get_episode_info_by_hash(player_hash, title)
+        except RuntimeError as e:
+            return f"Помилка завантаження за хешем: {e}", 400
+        await DB.add_to_history(user['id'], info['title'], stb_url or f"https://player.starlight.digital/index.html?hash={player_hash}")
+    else:
+        if not stb_url or not stb.is_stb_url(stb_url):
+            return "Невірне посилання STB", 400
 
-    try:
-        info = await stb.async_get_episode_info(stb_url)
-    except RuntimeError as e:
-        return f"Помилка: {e}", 400
-
-    title = info['title']
-    await DB.add_to_history(user['id'], title, stb_url)
+        try:
+            info = await stb.async_get_episode_info(stb_url)
+        except RuntimeError as e:
+            return f"Помилка: {e}", 400
+        await DB.add_to_history(user['id'], info['title'], stb_url)
 
     safe_title = re.sub(r'[\\/:*?"<>|]', '_', title)
     filename = f"{safe_title}.mp4"

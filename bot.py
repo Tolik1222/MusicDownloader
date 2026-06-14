@@ -35,6 +35,28 @@ playlist_cache: _LRUCache = _LRUCache(maxsize=200)
 track_cache: _LRUCache = _LRUCache(maxsize=200)
 
 
+# Меню та клавіатури
+
+def get_main_menu_markup() -> types.InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        types.InlineKeyboardButton(text="🎵 Музика", callback_data="menu_music"),
+        types.InlineKeyboardButton(text="🎬 YouTube", callback_data="menu_youtube")
+    )
+    builder.row(
+        types.InlineKeyboardButton(text="📺 СТБ", callback_data="menu_stb")
+    )
+    return builder.as_markup()
+
+
+def get_back_markup() -> types.InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        types.InlineKeyboardButton(text="⬅️ Назад до меню", callback_data="menu_back")
+    )
+    return builder.as_markup()
+
+
 # Команди
 
 @router.message(Command("start"))
@@ -45,12 +67,61 @@ async def cmd_start(message: types.Message):
         message.from_user.first_name,
     )
     await message.answer(
-        "🎧 *Привіт!* Надішли мені:\n"
-        "1️⃣ **Назву пісні** (для пошуку на SoundCloud)\n"
-        "2️⃣ **Пряме посилання** на SoundCloud або YouTube (відео, shorts, YouTube Music)\n\n"
-        "💡 *Корисна порада:* щоб шукати треки саме на **YouTube**, почни свій запит з `yt:` (наприклад, `yt: show must go on`).",
+        "👋 *Привіт!* Я універсальний завантажувач медіа.\n\n"
+        "Оберіть розділ меню нижче, щоб розпочати:",
+        reply_markup=get_main_menu_markup(),
         parse_mode="Markdown",
     )
+
+
+@router.callback_query(F.data == "menu_back")
+async def cb_menu_back(call: types.CallbackQuery):
+    await call.answer()
+    await call.message.edit_text(
+        "👋 *Привіт!* Я універсальний завантажувач медіа.\n\n"
+        "Оберіть розділ меню нижче, щоб розпочати:",
+        reply_markup=get_main_menu_markup(),
+        parse_mode="Markdown"
+    )
+
+
+@router.callback_query(F.data == "menu_music")
+async def cb_menu_music(call: types.CallbackQuery):
+    await call.answer()
+    await call.message.edit_text(
+        "🎵 *Музика (SoundCloud)*\n\n"
+        "Надішліть мені **назву пісні** для пошуку або **пряме посилання** на трек/плейлист із SoundCloud.",
+        reply_markup=get_back_markup(),
+        parse_mode="Markdown"
+    )
+
+
+@router.callback_query(F.data == "menu_youtube")
+async def cb_menu_youtube(call: types.CallbackQuery):
+    await call.answer()
+    await call.message.edit_text(
+        "🎬 *YouTube завантажувач*\n\n"
+        "Надішліть мені **пряме посилання** на відео, Shorts або YouTube Music.\n\n"
+        "💡 *Корисна порада:* також ви можете шукати відео на YouTube прямо в чаті! Для цього почніть запит з `yt: ` (наприклад: `yt: Queen Bohemian Rhapsody`).",
+        reply_markup=get_back_markup(),
+        parse_mode="Markdown"
+    )
+
+
+@router.callback_query(F.data == "menu_stb")
+async def cb_menu_stb(call: types.CallbackQuery):
+    await call.answer()
+    web_url = os.getenv('WEB_URL', '')
+    url_text = f"\n\n🌐 [Перейти до веб-сайту]({web_url})" if web_url else ""
+    await call.message.edit_text(
+        "📺 *МастерШеф (СТБ)*\n\n"
+        "⚠️ Завантаження та перегляд серій СТБ через Telegram-бота недоступні.\n\n"
+        "Ця функція працює **тільки через наш веб-сервіс** за умови використання пристрою з українським інтернет-провайдером (через регіональні обмеження СТБ та захист Cloudflare)."
+        f"{url_text}",
+        reply_markup=get_back_markup(),
+        parse_mode="Markdown"
+    )
+
 
 
 @router.message(Command("stats"))
@@ -127,6 +198,19 @@ async def send_search_results(
 @router.message(F.text.regexp(r'^[^/].*'))
 async def handle_text(message: types.Message):
     clean_text = message.text.strip()
+    
+    # Intercept STB/Starlight URLs in the Telegram Bot
+    if 'stb.ua' in clean_text.lower() or 'starlight.digital' in clean_text.lower():
+        web_url = os.getenv('WEB_URL', '')
+        url_text = f"\n\n🌐 [Перейти до веб-сайту]({web_url})" if web_url else ""
+        return await message.answer(
+            "📺 *МастерШеф (СТБ)*\n\n"
+            "⚠️ Завантаження та перегляд серій СТБ через Telegram-бота недоступні.\n\n"
+            "Ця функція працює **тільки через наш веб-сервіс** за умови використання пристрою з українським інтернет-провайдером (через регіональні обмеження СТБ та захист Cloudflare)."
+            f"{url_text}",
+            parse_mode="Markdown"
+        )
+
     if sc.is_valid_url(clean_text):
         status = await message.answer("🔍 Аналізую посилання...")
         info = await sc.async_get_url_info(clean_text)

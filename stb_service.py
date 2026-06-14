@@ -169,6 +169,52 @@ async def async_get_episode_info(stb_url: str) -> dict:
     return await loop.run_in_executor(None, get_episode_info, stb_url)
 
 
+def get_episode_info_by_hash(player_hash: str, page_title: str = '') -> dict:
+    """
+    Повертає інформацію про серію на основі вже готового player_hash.
+    Використовується при клієнтському парсингу.
+    """
+    referer = "https://player.starlight.digital/"
+    data = _call_starlight_api(player_hash, referer)
+
+    resp_type = data.get('type', '')
+    if resp_type == 'video':
+        video_obj = data['video'][0]
+    elif resp_type == 'playlist':
+        video_obj = data['video'][0]['video'][0]
+    elif resp_type == 'full-playlist':
+        video_obj = data['source']
+    else:
+        raise RuntimeError(f"Невідомий тип відповіді API: {resp_type}")
+
+    media_list = video_obj.get('media', [])
+    if not media_list:
+        raise RuntimeError(
+            "Відео поки що недоступне (можливо, серія ще не вийшла або потрібна підписка)."
+        )
+
+    best = _pick_best_media(media_list)
+    title = video_obj.get('name') or data.get('name') or page_title or 'MasterChef Episode'
+    if page_title and ('\ufffd' in title or not title):
+        title = page_title
+
+    return {
+        'title':    title,
+        'duration': video_obj.get('duration', 0),
+        'poster':   video_obj.get('poster') or data.get('poster', ''),
+        'url':      best['url'],
+        'quality':  best.get('quality', '?'),
+        'media':    media_list,
+    }
+
+
+async def async_get_episode_info_by_hash(player_hash: str, page_title: str = '') -> dict:
+    """Асинхронна обгортка для get_episode_info_by_hash."""
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, get_episode_info_by_hash, player_hash, page_title)
+
+
+
 # ---------------------------------------------------------------------------
 # Пошук серій на сайті STB (МастерШеф)
 # Сайт надає список серій у вигляді HTML-сторінки з архівом серій.
