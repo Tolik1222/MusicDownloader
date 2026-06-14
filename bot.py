@@ -31,6 +31,8 @@ class _LRUCache(OrderedDict):
 
 
 search_results: _LRUCache = _LRUCache(maxsize=200)
+playlist_cache: _LRUCache = _LRUCache(maxsize=200)
+track_cache: _LRUCache = _LRUCache(maxsize=200)
 
 
 # Команди
@@ -43,7 +45,10 @@ async def cmd_start(message: types.Message):
         message.from_user.first_name,
     )
     await message.answer(
-        "🎧 *Привіт!* Скинь назву треку або посилання на SoundCloud.",
+        "🎧 *Привіт!* Надішли мені:\n"
+        "1️⃣ **Назву пісні** (для пошуку на SoundCloud)\n"
+        "2️⃣ **Пряме посилання** на SoundCloud або YouTube (відео, shorts, YouTube Music)\n\n"
+        "💡 *Корисна порада:* щоб шукати треки саме на **YouTube**, почни свій запит з `yt:` (наприклад, `yt: show must go on`).",
         parse_mode="Markdown",
     )
 
@@ -121,9 +126,24 @@ async def send_search_results(
 
 @router.message(F.text.regexp(r'^[^/].*'))
 async def handle_text(message: types.Message):
-    if "soundcloud.com/" in message.text:
-        return await _download_by_link(message, message.text.strip())
-    await send_search_results(message, message.text.strip(), offset=0)
+    clean_text = message.text.strip()
+    if sc.is_valid_url(clean_text):
+        status = await message.answer("🔍 Аналізую посилання...")
+        info = await sc.async_get_url_info(clean_text)
+        await status.delete()
+        
+        if not info:
+            return await message.answer("❌ Не вдалося отримати інформацію за цим посиланням.")
+            
+        if info['type'] == 'track':
+            url_lower = clean_text.lower()
+            if "youtube.com" in url_lower or "youtu.be" in url_lower or "music.youtube.com" in url_lower:
+                return await _prompt_youtube_format(message, info)
+            return await _download_track_direct(message, info)
+        elif info['type'] == 'playlist':
+            return await _handle_playlist_input(message, info)
+            
+    await send_search_results(message, clean_text, offset=0)
 
 
 @router.callback_query(F.data.startswith("page_"))
@@ -145,22 +165,63 @@ async def _safe_edit(msg: types.Message, text: str):
         pass
 
 
-async def _download_by_link(message: types.Message, url: str):
-    status = await message.answer("📥 Завантажую трек за посиланням...")
+async def _download_track_direct(message: types.Message, track: dict):
+    status = await message.answer(f"📥 Завантажую трек: *{track['title']}*...", parse_mode="Markdown")
     file_path: str | None = None
+    user_id = message.from_user.id
 
     async def on_progress(text: str):
         await _safe_edit(status, text)
 
     try:
-        file_path = await sc.async_download_track(url, progress_callback=on_progress)
-        await message.answer_audio(types.FSInputFile(file_path))
+        file_path, title = await sc.async_download_track(track['url'], progress_callback=on_progress)
+        await message.answer_audio(
+            types.FSInputFile(file_path),
+            title=title,
+            caption=f"✅ {title}",
+        )
+        await DB.add_to_history(user_id, title, track['url'])
         await status.delete()
     except Exception as e:
-        await _safe_edit(status, f"❌ Помилка завантаження: {e}")
+        if str(e) == "DRM_PROTECTED":
+            await _safe_edit(status, f"❌ Помилка: Трек *{track['title']}* захищений DRM і не може бути завантажений.", parse_mode="Markdown")
+        else:
+            await _safe_edit(status, f"❌ Помилка завантаження: {e}")
     finally:
         if file_path and os.path.exists(file_path):
             os.remove(file_path)
+
+
+async def _handle_playlist_input(message: types.Message, playlist: dict):
+    playlist_id = playlist['id']
+    playlist_cache[playlist_id] = playlist
+    
+    tracks = playlist['tracks']
+    total_tracks = len(tracks)
+    
+    tracks_list_str = ""
+    for t in tracks[:10]:
+        tracks_list_str += f"• {t['title']}\n"
+    if total_tracks > 10:
+        tracks_list_str += f"• та ще {total_tracks - 10} треків...\n"
+        
+    text = (
+        f"📋 *Плейлист:* {playlist['title']}\n"
+        f"👥 *Виконавець/Канал:* {tracks[0]['uploader'] if tracks else 'Невідомо'}\n"
+        f"🎵 *Всього треків:* {total_tracks}\n\n"
+        f"📝 *Список треків:*\n{tracks_list_str}\n"
+        f"Оберіть варіант завантаження:"
+    )
+    
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        types.InlineKeyboardButton(text="📥 Завантажити все", callback_data=f"pl_all_{playlist_id}")
+    )
+    builder.row(
+        types.InlineKeyboardButton(text="📂 Вибірково", callback_data=f"pl_sel_{playlist_id}_0")
+    )
+    
+    await message.answer(text, reply_markup=builder.as_markup(), parse_mode="Markdown")
 
 
 @router.callback_query(F.data.startswith("dl_"))
@@ -177,6 +238,12 @@ async def cb_download(call: types.CallbackQuery):
         )
 
     track = tracks[idx]
+    
+    url_lower = track['url'].lower()
+    if "youtube.com" in url_lower or "youtu.be" in url_lower or "music.youtube.com" in url_lower:
+        await call.answer()
+        return await _prompt_youtube_format(call.message, track)
+
     await call.answer()
 
     status = await call.message.answer(
@@ -188,7 +255,7 @@ async def cb_download(call: types.CallbackQuery):
         await _safe_edit(status, text)
 
     try:
-        file_path = await sc.async_download_track(
+        file_path, _ = await sc.async_download_track(
             track['url'],
             progress_callback=on_progress,
         )
@@ -200,7 +267,288 @@ async def cb_download(call: types.CallbackQuery):
         await DB.add_to_history(user_id, track['title'], track['url'])
         await status.delete()
     except Exception as e:
-        await _safe_edit(status, f"❌ Помилка: {e}")
+        if str(e) == "DRM_PROTECTED":
+            await _safe_edit(status, f"❌ Помилка: Трек *{track['title']}* захищений DRM і не може бути завантажений.", parse_mode="Markdown")
+        else:
+            await _safe_edit(status, f"❌ Помилка: {e}")
+    finally:
+        if file_path and os.path.exists(file_path):
+            os.remove(file_path)
+
+
+@router.callback_query(F.data.startswith("pl_all_"))
+async def cb_playlist_all(call: types.CallbackQuery):
+    playlist_id = call.data.split("_")[2]
+    playlist = playlist_cache.get(playlist_id)
+    
+    if not playlist:
+        return await call.answer("Результати застаріли, спробуйте ще раз.", show_alert=True)
+        
+    await call.answer()
+    user_id = call.from_user.id
+    tracks = playlist['tracks']
+    total = len(tracks)
+    
+    status = await call.message.answer(
+        f"🚀 *Починаю завантаження плейлиста:* {playlist['title']} (0/{total})...",
+        parse_mode="Markdown"
+    )
+    
+    downloaded_count = 0
+    skipped_count = 0
+    
+    for idx, track in enumerate(tracks):
+        await _safe_edit(
+            status, 
+            f"📥 *Завантаження плейлиста:* {downloaded_count + skipped_count}/{total} треків оброблено...\n"
+            f"Поточний трек: *{track['title']}*"
+        )
+        
+        file_path = None
+        
+        async def on_progress(text: str):
+            await _safe_edit(
+                status,
+                f"📥 *Завантаження плейлиста:* {downloaded_count + skipped_count}/{total} треків оброблено...\n"
+                f"Поточний трек: *{track['title']}*\n"
+                f"{text}"
+            )
+            
+        try:
+            file_path, title = await sc.async_download_track(track['url'], progress_callback=on_progress)
+            await call.message.answer_audio(
+                types.FSInputFile(file_path),
+                title=title,
+                caption=f"✅ {title} ({idx+1}/{total})",
+            )
+            await DB.add_to_history(user_id, title, track['url'])
+            downloaded_count += 1
+        except Exception as e:
+            skipped_count += 1
+            if str(e) == "DRM_PROTECTED":
+                await call.message.answer(
+                    f"⚠️ Трек *{track['title']}* пропущено (захищений DRM).",
+                    parse_mode="Markdown"
+                )
+            else:
+                await call.message.answer(
+                    f"❌ Трек *{track['title']}* пропущено через помилку: {e}",
+                    parse_mode="Markdown"
+                )
+        finally:
+            if file_path and os.path.exists(file_path):
+                os.remove(file_path)
+                
+    await _safe_edit(
+        status, 
+        f"✅ *Завантаження завершено!*\n"
+        f"Успішно завантажено: {downloaded_count}\n"
+        f"Пропущено: {skipped_count}"
+    )
+
+
+@router.callback_query(F.data.startswith("pl_sel_"))
+async def cb_playlist_selective(call: types.CallbackQuery):
+    parts = call.data.split("_")
+    playlist_id = parts[2]
+    offset = int(parts[3])
+    
+    playlist = playlist_cache.get(playlist_id)
+    if not playlist:
+        return await call.answer("Результати застаріли, спробуйте ще раз.", show_alert=True)
+        
+    await call.answer()
+    tracks = playlist['tracks']
+    total = len(tracks)
+    
+    page_tracks = tracks[offset: offset + ITEMS_PER_PAGE]
+    
+    text = (
+        f"📂 *Вибір треків з плейлиста:*\n"
+        f"📄 Сторінка: {offset // ITEMS_PER_PAGE + 1} / {(total - 1) // ITEMS_PER_PAGE + 1}\n"
+        f"Оберіть трек для завантаження:"
+    )
+    
+    builder = InlineKeyboardBuilder()
+    for t in page_tracks:
+        title = t['title'][:40]
+        builder.row(
+            types.InlineKeyboardButton(
+                text=f"🎵 {title}",
+                callback_data=f"pl_dl_{playlist_id}_{t['index']}"
+            )
+        )
+        
+    nav: list[types.InlineKeyboardButton] = []
+    if offset > 0:
+        nav.append(types.InlineKeyboardButton(
+            text="⬅️ Назад",
+            callback_data=f"pl_sel_{playlist_id}_{offset - ITEMS_PER_PAGE}"
+        ))
+    nav.append(types.InlineKeyboardButton(
+        text="📋 Меню плейлиста",
+        callback_data=f"pl_menu_{playlist_id}"
+    ))
+    if offset + ITEMS_PER_PAGE < total:
+        nav.append(types.InlineKeyboardButton(
+            text="Далі ➡️",
+            callback_data=f"pl_sel_{playlist_id}_{offset + ITEMS_PER_PAGE}"
+        ))
+        
+    builder.row(*nav)
+    
+    await call.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="Markdown")
+
+
+@router.callback_query(F.data.startswith("pl_menu_"))
+async def cb_playlist_menu(call: types.CallbackQuery):
+    playlist_id = call.data.split("_")[2]
+    playlist = playlist_cache.get(playlist_id)
+    if not playlist:
+        return await call.answer("Результати застаріли, спробуйте ще раз.", show_alert=True)
+        
+    await call.answer()
+    tracks = playlist['tracks']
+    total_tracks = len(tracks)
+    
+    tracks_list_str = ""
+    for t in tracks[:10]:
+        tracks_list_str += f"• {t['title']}\n"
+    if total_tracks > 10:
+        tracks_list_str += f"• та ще {total_tracks - 10} треків...\n"
+        
+    text = (
+        f"📋 *Плейлист:* {playlist['title']}\n"
+        f"👥 *Виконавець/Канал:* {tracks[0]['uploader'] if tracks else 'Невідомо'}\n"
+        f"🎵 *Всього треків:* {total_tracks}\n\n"
+        f"📝 *Список треків:*\n{tracks_list_str}\n"
+        f"Оберіть варіант завантаження:"
+    )
+    
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        types.InlineKeyboardButton(text="📥 Завантажити все", callback_data=f"pl_all_{playlist_id}")
+    )
+    builder.row(
+        types.InlineKeyboardButton(text="📂 Вибірково", callback_data=f"pl_sel_{playlist_id}_0")
+    )
+    
+    await call.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="Markdown")
+
+
+@router.callback_query(F.data.startswith("pl_dl_"))
+async def cb_playlist_download_track(call: types.CallbackQuery):
+    parts = call.data.split("_")
+    playlist_id = parts[2]
+    track_idx = int(parts[3])
+    
+    playlist = playlist_cache.get(playlist_id)
+    if not playlist or track_idx >= len(playlist['tracks']):
+        return await call.answer("Результати застаріли, спробуйте ще раз.", show_alert=True)
+        
+    await call.answer()
+    track = playlist['tracks'][track_idx]
+    user_id = call.from_user.id
+    
+    status = await call.message.answer(
+        f"📥 Готую до завантаження: *{track['title']}*",
+        parse_mode="Markdown",
+    )
+    
+    async def on_progress(text: str):
+        await _safe_edit(status, text)
+        
+    file_path = None
+    try:
+        file_path, title = await sc.async_download_track(track['url'], progress_callback=on_progress)
+        await call.message.answer_audio(
+            types.FSInputFile(file_path),
+            title=title,
+            caption=f"✅ {title}",
+        )
+        await DB.add_to_history(user_id, title, track['url'])
+        await status.delete()
+    except Exception as e:
+        if str(e) == "DRM_PROTECTED":
+            await _safe_edit(status, f"❌ Помилка: Трек *{track['title']}* захищений DRM і не може бути завантажений.", parse_mode="Markdown")
+        else:
+            await _safe_edit(status, f"❌ Помилка: {e}")
+    finally:
+        if file_path and os.path.exists(file_path):
+            os.remove(file_path)
+
+
+async def _prompt_youtube_format(message: types.Message, track: dict):
+    track_id = track.get('id') or str(hash(track['url']))
+    track_cache[track_id] = track
+    
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        types.InlineKeyboardButton(text="🎵 MP3 (Аудіо)", callback_data=f"yt_dl_mp3_{track_id}"),
+        types.InlineKeyboardButton(text="🎬 MP4 (Відео)", callback_data=f"yt_dl_mp4_{track_id}")
+    )
+    
+    await message.answer(
+        f"🎬 *Знайдено відео:* {track['title']}\n"
+        f"Оберіть формат для завантаження:",
+        reply_markup=builder.as_markup(),
+        parse_mode="Markdown"
+    )
+
+
+@router.callback_query(F.data.startswith("yt_dl_"))
+async def cb_yt_download(call: types.CallbackQuery):
+    parts = call.data.split("_")
+    fmt = parts[2]
+    track_id = "_".join(parts[3:])
+    
+    track = track_cache.get(track_id)
+    if not track:
+        return await call.answer("Результати застаріли, надішліть посилання знову.", show_alert=True)
+        
+    await call.answer()
+    as_video = fmt == "mp4"
+    user_id = call.from_user.id
+    
+    status = await call.message.answer(
+        f"📥 Готую до завантаження ({fmt.upper()}): *{track['title']}*",
+        parse_mode="Markdown",
+    )
+    
+    async def on_progress(text: str):
+        await _safe_edit(status, text)
+        
+    file_path = None
+    try:
+        file_path, title = await sc.async_download_track(
+            track['url'],
+            progress_callback=on_progress,
+            as_video=as_video,
+        )
+        
+        file_size = os.path.getsize(file_path)
+        if file_size > 50 * 1024 * 1024:
+            await _safe_edit(status, f"⚠️ Файл занадто великий для відправки через Telegram (більше 50 MB).\nБудь ласка, завантажте його через веб-сайт.")
+            return
+            
+        if as_video:
+            await call.message.answer_video(
+                types.FSInputFile(file_path),
+                caption=f"✅ {title}",
+            )
+        else:
+            await call.message.answer_audio(
+                types.FSInputFile(file_path),
+                title=title,
+                caption=f"✅ {title}",
+            )
+        await DB.add_to_history(user_id, title, track['url'])
+        await status.delete()
+    except Exception as e:
+        if str(e) == "DRM_PROTECTED":
+            await _safe_edit(status, f"❌ Помилка: Трек *{track['title']}* захищений DRM і не може бути завантажений.", parse_mode="Markdown")
+        else:
+            await _safe_edit(status, f"❌ Помилка: {e}")
     finally:
         if file_path and os.path.exists(file_path):
             os.remove(file_path)

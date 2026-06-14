@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SC Downloader</title>
+<title>Music Downloader</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
@@ -11,9 +11,11 @@
 :root{
   --bg:#0a0a0f;--surface:#13131a;--surface2:#1a1a24;
   --border:#1e1e2e;--accent:#f97316;--accent2:#fbbf24;
+  --yt-accent:#ef4444;--yt-accent2:#f87171;
+  --mc-accent:#16a34a;--mc-accent2:#4ade80;
   --text:#f1f0ec;--muted:#6b6b7b;--muted2:#2e2e3e;
 }
-body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;transition: background-color 0.3s ease;}
 body::before{content:'';position:fixed;inset:0;z-index:0;
   background-image:linear-gradient(rgba(255,255,255,.018) 1px,transparent 1px),
     linear-gradient(90deg,rgba(255,255,255,.018) 1px,transparent 1px);
@@ -26,10 +28,10 @@ nav{position:sticky;top:0;z-index:100;
   padding:0 28px;height:58px;
   display:flex;align-items:center;justify-content:space-between}
 .nav-logo{font-family:'Syne',sans-serif;font-size:13px;font-weight:800;
-  letter-spacing:.1em;text-transform:uppercase;color:var(--accent)}
+  letter-spacing:.1em;text-transform:uppercase;color:var(--accent);transition: color 0.3s ease;}
 .nav-right{display:flex;align-items:center;gap:12px}
 .nav-user{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
-.avatar{width:28px;height:28px;border-radius:50%;border:1.5px solid var(--accent);object-fit:cover}
+.avatar{width:28px;height:28px;border-radius:50%;border:1.5px solid var(--accent);object-fit:cover;transition: border-color 0.3s ease;}
 .avatar-ph{width:28px;height:28px;border-radius:50%;background:var(--surface2);
   border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;
   font-size:12px;color:var(--accent);font-weight:700}
@@ -43,25 +45,135 @@ nav{position:sticky;top:0;z-index:100;
 
 .wrap{position:relative;z-index:1;max-width:860px;margin:0 auto;padding:44px 20px 80px}
 
-.hero{margin-bottom:40px}
+.hero{margin-bottom:30px}
 .hero h1{font-family:'Syne',sans-serif;font-size:clamp(28px,4.5vw,48px);
   font-weight:800;line-height:1.1;
   background:linear-gradient(135deg,#f97316,#fbbf24);
   -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
-  margin-bottom:8px}
+  margin-bottom:8px;transition: all 0.3s ease;}
 .hero p{color:var(--muted);font-size:14px;font-weight:300}
 
-/* Пошук */
+/* Динамічна стилізація під SoundCloud / YouTube */
+body[data-source="soundcloud"] .search-box:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 15px rgba(249, 115, 22, 0.12);
+}
+body[data-source="youtube"] .search-box:focus-within {
+  border-color: var(--yt-accent);
+  box-shadow: 0 0 15px rgba(239, 68, 68, 0.12);
+}
+body[data-source="youtube"] .btn-search {
+  background: var(--yt-accent);
+}
+body[data-source="youtube"] .btn-search:hover {
+  background: var(--yt-accent2);
+}
+body[data-source="youtube"] .track:hover {
+  border-color: rgba(239, 68, 68, 0.4);
+}
+body[data-source="youtube"] .btn-dl:hover {
+  border-color: var(--yt-accent);
+  color: var(--yt-accent);
+}
+body[data-source="youtube"] .btn-page:hover {
+  border-color: var(--yt-accent);
+  color: var(--yt-accent);
+}
+body[data-source="youtube"] .avatar {
+  border-color: var(--yt-accent);
+}
+body[data-source="youtube"] .nav-logo {
+  color: var(--yt-accent);
+}
+body[data-source="youtube"] .hero h1 {
+  background: linear-gradient(135deg, #ef4444, #f87171);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+body[data-source="masterchef"] .search-box:focus-within{border-color:var(--mc-accent);box-shadow:0 0 15px rgba(22,163,74,.12)}
+body[data-source="masterchef"] .btn-search{background:var(--mc-accent)}
+body[data-source="masterchef"] .btn-search:hover{background:var(--mc-accent2)}
+body[data-source="masterchef"] .avatar{border-color:var(--mc-accent)}
+body[data-source="masterchef"] .nav-logo{color:var(--mc-accent)}
+body[data-source="masterchef"] .hero h1{background:linear-gradient(135deg,#16a34a,#4ade80);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.tab-btn[data-tab="masterchef"].active{border-color:var(--mc-accent);box-shadow:0 0 12px rgba(22,163,74,.15)}
+/* МастерШеф панель */
+#mc-panel{display:none;margin-bottom:32px}
+.mc-search-row{display:flex;gap:8px;margin-bottom:18px}
+.mc-input{flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:9px;padding:10px 14px;font-size:14px;font-family:'DM Sans',sans-serif;outline:none;transition:border-color .2s}
+.mc-input:focus{border-color:var(--mc-accent)}
+.mc-btn{background:var(--mc-accent);color:#fff;border:none;border-radius:9px;padding:10px 20px;font-size:13px;font-weight:600;cursor:pointer;transition:background .2s;font-family:'DM Sans',sans-serif;white-space:nowrap}
+.mc-btn:hover{background:var(--mc-accent2);color:#000}
+.mc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+.mc-card{background:var(--surface);border:1px solid var(--border);border-radius:11px;overflow:hidden;transition:border-color .2s,transform .2s;animation:up .3s ease both}
+.mc-card:hover{border-color:var(--mc-accent);transform:translateY(-2px)}
+.mc-thumb{width:100%;aspect-ratio:4/3;object-fit:cover;display:block;background:var(--surface2)}
+.mc-thumb-ph{width:100%;aspect-ratio:4/3;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:28px}
+.mc-body{padding:10px 12px}
+.mc-title{font-size:12px;font-weight:500;line-height:1.4;margin-bottom:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.mc-dl-btn{width:100%;background:none;border:1px solid var(--mc-accent);color:var(--mc-accent);border-radius:7px;padding:7px;font-size:12px;font-weight:600;cursor:pointer;transition:all .2s;font-family:'DM Sans',sans-serif}
+.mc-dl-btn:hover{background:var(--mc-accent);color:#fff}
+.mc-dl-btn:disabled{opacity:.4;cursor:not-allowed}
+.mc-q-link{display:inline-block;padding:5px 10px;border:1px solid var(--mc-accent);color:var(--mc-accent);border-radius:6px;text-decoration:none;font-size:11px;font-weight:600;margin:2px;transition:all .2s}
+.mc-q-link:hover{background:var(--mc-accent);color:#fff}
+.mc-status{color:var(--muted);font-size:13px;padding:12px 0}
+
+/* Таби вибору джерела */
+.search-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.tab-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 9px;
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  font-family: 'DM Sans', sans-serif;
+}
+.tab-btn svg {
+  width: 15px;
+  height: 15px;
+  fill: currentColor;
+  transition: transform 0.2s ease;
+}
+.tab-btn:hover {
+  color: var(--text);
+  border-color: var(--border);
+}
+.tab-btn:hover svg {
+  transform: scale(1.1);
+}
+.tab-btn.active {
+  background: var(--surface2);
+  color: var(--text);
+}
+.tab-btn[data-tab="soundcloud"].active {
+  border-color: var(--accent);
+  box-shadow: 0 0 12px rgba(249, 115, 22, 0.15);
+}
+.tab-btn[data-tab="youtube"].active {
+  border-color: var(--yt-accent);
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.15);
+}
+
+/* Пошуковий рядок */
 .search-box{display:flex;gap:8px;background:var(--surface);
   border:1px solid var(--border);border-radius:14px;padding:7px;
   margin-bottom:36px;transition:border-color .2s}
-.search-box:focus-within{border-color:var(--accent)}
 .search-input{flex:1;background:none;border:none;outline:none;
   color:var(--text);font-family:'DM Sans',sans-serif;font-size:15px;padding:9px 14px}
 .search-input::placeholder{color:var(--muted)}
 .btn-search{background:var(--accent);color:#000;border:none;border-radius:9px;
   padding:10px 24px;font-size:13px;font-weight:600;cursor:pointer;
-  transition:background .2s;white-space:nowrap;font-family:'DM Sans',sans-serif}
+  transition:all .2s;white-space:nowrap;font-family:'DM Sans',sans-serif}
 .btn-search:hover{background:var(--accent2)}
 
 .label{font-family:'Syne',sans-serif;font-size:10px;font-weight:600;
@@ -114,7 +226,7 @@ nav{position:sticky;top:0;z-index:100;
 <body>
 
 <nav>
-  <span class="nav-logo">⬡ SC DL</span>
+  <span class="nav-logo">⬡ Music DL</span>
   <div class="nav-right">
     {% if is_admin %}
       <a href="/admin" class="btn-admin">⚡ Адмінка</a>
@@ -134,12 +246,37 @@ nav{position:sticky;top:0;z-index:100;
 <div class="wrap">
   <div class="hero">
     <h1>Знайди трек.<br>Скачай зараз.</h1>
-    <p>SoundCloud · MP3 192kbps · Миттєво</p>
+    <p>SoundCloud · YouTube · MP3 192kbps · Миттєво</p>
+  </div>
+
+  <div class="search-tabs">
+    <button type="button" class="tab-btn {% if source != 'youtube' %}active{% endif %}" data-tab="soundcloud" onclick="setSource('soundcloud', this)">
+      <svg viewBox="0 0 24 24"><path d="M11.83 13.06c.03-.32.06-.63.06-.94 0-.31-.03-.62-.06-.94h6.05c.08.31.12.63.12.94 0 .31-.04.63-.12.94h-6.05zm-1.63 0c-.04-.32-.06-.63-.06-.94 0-.31.02-.62.06-.94H11.2c.04.32.06.63.06.94 0 .31-.02.62-.06.94h-1.01zm-1.6 0c-.05-.32-.08-.63-.08-.94 0-.31.03-.62.08-.94h1c.05.32.08.63.08.94 0 .31-.03.62-.08.94h-1zm-1.57 0c-.08-.32-.12-.63-.12-.94 0-.31.04-.63.12-.94h.97c.07.31.11.63.11.94 0 .31-.04.63-.11.94h-.97zm-1.54 0c-.1-.32-.16-.63-.16-.94 0-.31.06-.63.16-.94h.92c.1.31.15.63.15.94 0 .31-.05.63-.15.94h-.92zm-1.51 0c-.14-.32-.23-.63-.23-.94 0-.31.09-.63.23-.94h.87c.14.31.21.63.21.94 0 .31-.07.63-.21.94h-.87zm-1.46 0c-.2-.32-.32-.63-.32-.94 0-.31.12-.63.32-.94h.79c.19.31.29.63.29.94 0 .31-.1.63-.29.94h-.79zm-1.41 0c-.3-.32-.47-.63-.47-.94 0-.31.17-.63.47-.94h.69c.28.31.42.63.42.94 0 .31-.14.63-.42.94h-.69zm-1.33 0C.63 12.74.5 12.43.5 12.12c0-.31.13-.62.48-.94h.54c.33.31.5.63.5.94 0 .31-.17.63-.5.94H.98zm21.68-.44c-.11-.53-.41-.98-.82-1.31-.41-.33-.92-.51-1.48-.51-.15 0-.29.01-.43.04-.37-.87-1.12-1.52-2.02-1.81-.3-.1-.61-.14-.93-.14-.14 0-.27.01-.4.03-.54-.92-1.41-1.58-2.45-1.83-.35-.09-.72-.13-1.09-.13-.77 0-1.5.19-2.13.54-.42.23-.79.55-1.09.92-.37-.77-1.04-1.33-1.85-1.58-.3-.09-.61-.13-.93-.13-.39 0-.77.06-1.12.18-.75.25-1.38.77-1.76 1.44-.31-.53-.78-.94-1.33-1.18-.27-.12-.56-.18-.86-.18-.46 0-.89.13-1.25.37-.58.39-.96.99-1.05 1.68-.13-.1-.28-.18-.45-.24-.22-.09-.46-.13-.7-.13-.33 0-.64.08-.91.24-.46.27-.78.73-.87 1.25H2.6c-.22-.09-.46-.13-.7-.13-.33 0-.64.08-.91.24-.46.27-.78.73-.87 1.25H0v2.75h.06c.07.41.25.78.53 1.07.28.29.64.47 1.04.53v.03h20.74v-.03c.4-.06.76-.24 1.04-.53.28-.29.46-.66.53-1.07H24v-2.31h-.34c-.11-.53-.41-.98-.82-1.31z"/></svg>
+      SoundCloud
+    </button>
+    <button type="button" class="tab-btn {% if source == 'youtube' %}active{% endif %}" data-tab="youtube" onclick="setSource('youtube', this)">
+      <svg viewBox="0 0 24 24"><path d="M23.498 6.163a3.003 3.003 0 0 0-2.11-2.11C19.517 3.545 12 3.545 12 3.545s-7.517 0-9.388.508a3.003 3.003 0 0 0-2.11 2.11C0 8.033 0 12 0 12s0 3.967.502 5.837a3.003 3.003 0 0 0 2.11 2.11c1.871.508 9.388.508 9.388.508s7.517 0 9.388-.508a3.003 3.003 0 0 0 2.11-2.11C24 15.967 24 12 24 12s0-3.967-.502-5.837zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+      YouTube
+    </button>
+    <button type="button" class="tab-btn" data-tab="masterchef" onclick="setSource('masterchef', this)">
+      👨‍🍳 МастерШеф
+    </button>
+  </div>
+
+  <!-- МастерШеф панель -->
+  <div id="mc-panel">
+    <div class="mc-search-row">
+      <input class="mc-input" id="mc-q" type="text" placeholder="Пошук серії... (або залиш пустим для останніх)">
+      <button class="mc-btn" onclick="mcSearch()">🔍 Знайти</button>
+    </div>
+    <div id="mc-status" class="mc-status"></div>
+    <div id="mc-grid" class="mc-grid"></div>
   </div>
 
   <form class="search-box" method="GET" action="/search">
+    <input type="hidden" name="source" id="search-source" value="{{ source or 'soundcloud' }}">
     <input class="search-input" type="text" name="query"
-      placeholder="Назва треку або артист..."
+      placeholder="Назва треку, артист або посилання..."
       value="{{ query or '' }}" autofocus>
     <button class="btn-search" type="submit">Шукати</button>
   </form>
@@ -157,14 +294,21 @@ nav{position:sticky;top:0;z-index:100;
           {% if t.duration %}{{ t.duration // 60 }}:{{ '%02d' % (t.duration % 60) }}{% endif %}
         </div>
       </div>
-      <button class="btn-dl" onclick="dlTrack(this,'{{ t.url|e }}','{{ t.title|e }}')">↓ Скачати</button>
+      {% if 'youtube.com' in t.url or 'youtu.be' in t.url or 'music.youtube.com' in t.url or source == 'youtube' %}
+        <div style="display: flex; gap: 8px;">
+          <button class="btn-dl" onclick="dlTrack(this,'{{ t.url|e }}','{{ t.title|e }}', false)">🎵 MP3</button>
+          <button class="btn-dl" onclick="dlTrack(this,'{{ t.url|e }}','{{ t.title|e }}', true)">🎬 MP4</button>
+        </div>
+      {% else %}
+        <button class="btn-dl" onclick="dlTrack(this,'{{ t.url|e }}','{{ t.title|e }}', false)">↓ Скачати</button>
+      {% endif %}
     </div>
     {% endfor %}
   </div>
 
   <div class="pagination">
     {% if has_prev %}
-      <a class="btn-page" href="/search?query={{ query|urlencode }}&page={{ page - 1 }}">← Попередня</a>
+      <a class="btn-page" href="/search?query={{ query|urlencode }}&source={{ source|urlencode }}&page={{ page - 1 }}">← Попередня</a>
     {% else %}
       <span class="btn-page disabled">← Попередня</span>
     {% endif %}
@@ -172,7 +316,7 @@ nav{position:sticky;top:0;z-index:100;
     <div class="page-info">Сторінка {{ page|default(1) }}</div>
 
     {% if has_next %}
-      <a class="btn-page" href="/search?query={{ query|urlencode }}&page={{ page + 1 }}">Далі →</a>
+      <a class="btn-page" href="/search?query={{ query|urlencode }}&source={{ source|urlencode }}&page={{ page + 1 }}">Далі →</a>
     {% else %}
       <span class="btn-page disabled">Далі →</span>
     {% endif %}
@@ -200,24 +344,109 @@ nav{position:sticky;top:0;z-index:100;
 </form>
 
 <script>
-function dlTrack(btn, url, title) {
-  btn.disabled = true;
-  btn.textContent = '⏳ Готується...';
-  document.getElementById('dl-url').value   = url;
-  document.getElementById('dl-title').value = title;
-  document.getElementById('dlf').submit();
-  setTimeout(() => { btn.disabled = false; btn.textContent = '↓ Скачати'; }, 10000);
+function setSource(src, btnEl) {
+  document.getElementById('search-source').value = src;
+  document.body.setAttribute('data-source', src);
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+  if (btnEl) btnEl.classList.add('active');
+  // Показати/сховати МастерШеф панель та форму пошуку
+  const mcPanel = document.getElementById('mc-panel');
+  const searchBox = document.querySelector('.search-box');
+  if (src === 'masterchef') {
+    mcPanel.style.display = 'block';
+    searchBox.style.display = 'none';
+    if (!document.getElementById('mc-grid').children.length) mcSearch();
+  } else {
+    mcPanel.style.display = 'none';
+    searchBox.style.display = 'flex';
+  }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  const source = document.getElementById('search-source').value || 'soundcloud';
+  document.body.setAttribute('data-source', source);
   document.querySelectorAll('[data-delay]').forEach((el) => {
     const raw = el.getAttribute('data-delay');
     const value = raw ? Number.parseFloat(raw) : NaN;
-    if (!Number.isNaN(value)) {
-      el.style.animationDelay = `${value}s`;
-    }
+    if (!Number.isNaN(value)) el.style.animationDelay = `${value}s`;
   });
 });
+
+function dlTrack(btn, url, title, asVideo) {
+  btn.disabled = true;
+  const originalText = btn.innerHTML;
+  btn.textContent = '⏳ ...';
+  let asVideoInput = document.getElementById('dl-as-video');
+  if (!asVideoInput) {
+    asVideoInput = document.createElement('input');
+    asVideoInput.type = 'hidden'; asVideoInput.name = 'as_video'; asVideoInput.id = 'dl-as-video';
+    document.getElementById('dlf').appendChild(asVideoInput);
+  }
+  asVideoInput.value = asVideo ? 'true' : 'false';
+  document.getElementById('dl-url').value = url;
+  document.getElementById('dl-title').value = title;
+  document.getElementById('dlf').submit();
+  setTimeout(() => { btn.disabled = false; btn.innerHTML = originalText; }, 10000);
+}
+
+// МастерШеф
+async function mcSearch() {
+  const q = document.getElementById('mc-q').value.trim();
+  const status = document.getElementById('mc-status');
+  const grid = document.getElementById('mc-grid');
+  status.textContent = '🔍 Шукаємо серії...';
+  grid.innerHTML = '';
+  try {
+    const resp = await fetch(`/masterchef/search?q=${encodeURIComponent(q)}`);
+    const data = await resp.json();
+    if (!data.episodes || !data.episodes.length) {
+      status.textContent = 'Серій не знайдено.';
+      return;
+    }
+    status.textContent = '';
+    data.episodes.forEach((ep, i) => {
+      const card = document.createElement('div');
+      card.className = 'mc-card';
+      card.style.animationDelay = `${i * 0.04}s`;
+      const thumb = ep.poster
+        ? `<img class="mc-thumb" src="${ep.poster}" alt="" loading="lazy">`
+        : `<div class="mc-thumb-ph">🍳</div>`;
+      card.innerHTML = `${thumb}<div class="mc-body"><div class="mc-title">${ep.title}</div><button class="mc-dl-btn" onclick="mcDownload(this,'${ep.url.replace(/'/g,"\\'")}')">⬇ Завантажити MP4</button></div>`;
+      grid.appendChild(card);
+    });
+  } catch(e) {
+    status.textContent = '❌ Помилка: ' + e.message;
+  }
+}
+
+function mcDownload(btn, url) {
+  let mcf = document.getElementById('mcf');
+  if (!mcf) {
+    mcf = document.createElement('form');
+    mcf.id = 'mcf';
+    mcf.method = 'GET';
+    mcf.action = '/masterchef/download';
+    mcf.style.display = 'none';
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'url';
+    input.id = 'mc-url';
+    mcf.appendChild(input);
+    document.body.appendChild(mcf);
+  }
+  document.getElementById('mc-url').value = url;
+  mcf.submit();
+
+  const orig = btn.innerHTML;
+  btn.innerHTML = '📥 Запуск завантаження...';
+  btn.disabled = true;
+  setTimeout(() => {
+    btn.disabled = false;
+    btn.innerHTML = orig;
+  }, 4000);
+}
+
+document.getElementById('mc-q').addEventListener('keydown', e => { if (e.key==='Enter') mcSearch(); });
 </script>
 </body>
 </html>
