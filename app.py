@@ -74,6 +74,76 @@ def verify_telegram_login(data: dict) -> bool:
     return hmac.compare_digest(computed, check_hash)
 
 
+@app.before_serving
+async def run_startup_diagnostics():
+    print("🕵️‍♂️ Запуск діагностики з'єднання з STB...")
+    import urllib.request
+    import httpx
+    url = "https://www.stb.ua/masterchef/ua/video-2/"
+    
+    headers_basic = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept-Language': 'uk,ru;q=0.9,en;q=0.8',
+    }
+    
+    headers_full = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+        'Accept-Language': 'uk-UA,uk;q=0.9,ru;q=0.8,en-US;q=0.7,en;q=0.6',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none',
+        'Sec-Fetch-User': '?1',
+    }
+    
+    try:
+        req = urllib.request.Request(url, headers=headers_basic)
+        loop = asyncio.get_running_loop()
+        def _test_urllib(r):
+            with urllib.request.urlopen(r, timeout=5) as resp:
+                return resp.status, len(resp.read())
+        status, length = await loop.run_in_executor(None, _test_urllib, req)
+        print(f"  [DIAG] urllib basic: УСПІХ (Status: {status}, {length} bytes)")
+    except Exception as e:
+        print(f"  [DIAG] urllib basic: ПОМИЛКА ({e})")
+        
+    try:
+        req = urllib.request.Request(url, headers=headers_full)
+        loop = asyncio.get_running_loop()
+        def _test_urllib_full(r):
+            with urllib.request.urlopen(r, timeout=5) as resp:
+                return resp.status, len(resp.read())
+        status, length = await loop.run_in_executor(None, _test_urllib_full, req)
+        print(f"  [DIAG] urllib full: УСПІХ (Status: {status}, {length} bytes)")
+    except Exception as e:
+        print(f"  [DIAG] urllib full: ПОМИЛКА ({e})")
+        
+    try:
+        async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
+            resp = await client.get(url, headers=headers_basic)
+            print(f"  [DIAG] httpx basic: УСПІХ (Status: {resp.status_code}, {len(resp.content)} bytes)")
+    except Exception as e:
+        print(f"  [DIAG] httpx basic: ПОМИЛКА ({e})")
+        
+    try:
+        async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
+            resp = await client.get(url, headers=headers_full)
+            print(f"  [DIAG] httpx full: УСПІХ (Status: {resp.status_code}, {len(resp.content)} bytes)")
+    except Exception as e:
+        print(f"  [DIAG] httpx full: ПОМИЛКА ({e})")
+
+    # CDN test
+    try:
+        cdn_url = "https://e3p.starlight.digital/"
+        async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
+            resp = await client.get(cdn_url)
+            print(f"  [DIAG] CDN connection: УСПІХ (Status: {resp.status_code})")
+    except Exception as e:
+        print(f"  [DIAG] CDN connection: ПОМИЛКА ({e})")
+
+
 # Фонові потоки 
 
 def run_auto_clean():
@@ -240,8 +310,18 @@ async def download():
 async def masterchef_search():
     query = request.args.get('q', '').strip()
     try:
-        episodes = await stb.async_search_episodes(query=query, limit=30)
+        # Якщо введено пряме посилання на серію з сайту stb.ua
+        if stb.is_stb_url(query):
+            info = await stb.async_get_episode_info(query)
+            episodes = [{
+                'title': info['title'],
+                'url': query,
+                'poster': info.get('poster', '')
+            }]
+        else:
+            episodes = await stb.async_search_episodes(query=query, limit=30)
     except Exception as e:
+        print(f"[masterchef_search] Помилка пошуку або парсингу серії з STB: {e}")
         episodes = []
     return jsonify({'episodes': episodes})
 
@@ -296,19 +376,66 @@ async def masterchef_download():
     except Exception as e:
         print(f"[masterchef_download] Не вдалося отримати Content-Length: {e}")
 
-    async def generate():
-        try:
-            async with httpx.AsyncClient(timeout=None) as client:
-                async with client.stream("GET", info['url'], headers=headers) as r:
-                    r.raise_for_status()
-                    async for chunk in r.aiter_bytes(chunk_size=256 * 1024):  # Блоки по 256 KB
-                        yield chunk
-        except asyncio.CancelledError:
-            print("[masterchef_download] Завантаження перервано/скасовано користувачем.")
-            raise
-        except Exception as e:
-            print(f"[masterchef_download] Помилка стрімінгу: {e}")
-            raise
+    if content_length:
+        file_size = int(content_length)
+        CHUNK_SIZE = 2 * 1024 * 1024  # 2 MB chunks
+        CONCURRENT_REQUESTS = 8        # 8 паралельних підключень
+        total_chunks = (file_size + CHUNK_SIZE - 1) // CHUNK_SIZE
+
+        async def generate():
+            async def download_chunk(client, chunk_index):
+                start = chunk_index * CHUNK_SIZE
+                end = min(start + CHUNK_SIZE - 1, file_size - 1)
+                for attempt in range(3):
+                    try:
+                        chunk_headers = dict(headers)
+                        chunk_headers['Range'] = f"bytes={start}-{end}"
+                        resp = await client.get(info['url'], headers=chunk_headers)
+                        resp.raise_for_status()
+                        return chunk_index, resp.content
+                    except Exception as e:
+                        if attempt == 2:
+                            raise e
+                        await asyncio.sleep(0.5)
+
+            try:
+                async with httpx.AsyncClient(timeout=60.0) as client:
+                    tasks = {}
+                    # Запускаємо завантаження перших W частин паралельно
+                    for idx in range(min(CONCURRENT_REQUESTS, total_chunks)):
+                        tasks[idx] = asyncio.create_task(download_chunk(client, idx))
+
+                    for idx in range(total_chunks):
+                        # Чекаємо черговий шматок і одразу ж передаємо його клієнту
+                        _, data = await tasks[idx]
+                        yield data
+                        del tasks[idx]
+
+                        # Стартуємо завантаження наступного по черзі шматка
+                        next_idx = idx + CONCURRENT_REQUESTS
+                        if next_idx < total_chunks:
+                            tasks[next_idx] = asyncio.create_task(download_chunk(client, next_idx))
+            except asyncio.CancelledError:
+                print("[masterchef_download] Завантаження перервано/скасовано користувачем.")
+                raise
+            except Exception as e:
+                print(f"[masterchef_download] Помилка паралельного стрімінгу: {e}")
+                raise
+    else:
+        # Fallback на звичайний послідовний стрімінг, якщо не вдалося отримати розмір
+        async def generate():
+            try:
+                async with httpx.AsyncClient(timeout=None) as client:
+                    async with client.stream("GET", info['url'], headers=headers) as r:
+                        r.raise_for_status()
+                        async for chunk in r.aiter_bytes(chunk_size=256 * 1024):
+                            yield chunk
+            except asyncio.CancelledError:
+                print("[masterchef_download] Завантаження перервано/скасовано користувачем.")
+                raise
+            except Exception as e:
+                print(f"[masterchef_download] Помилка стрімінгу: {e}")
+                raise
 
     quoted_filename = urllib.parse.quote(filename)
     response_headers = {

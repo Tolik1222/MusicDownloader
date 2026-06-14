@@ -41,11 +41,20 @@ def is_stb_url(url: str) -> bool:
 
 
 def _fetch(url: str, extra_headers: dict | None = None) -> bytes:
+    import os
     headers = dict(_HEADERS)
     if extra_headers:
         headers.update(extra_headers)
+    
+    stb_proxy = os.getenv('STB_PROXY', '').strip()
+    if stb_proxy:
+        proxy_handler = urllib.request.ProxyHandler({'http': stb_proxy, 'https': stb_proxy})
+        opener = urllib.request.build_opener(proxy_handler)
+    else:
+        opener = urllib.request.build_opener()
+
     req = urllib.request.Request(url, headers=headers)
-    with urllib.request.urlopen(req, timeout=15) as resp:
+    with opener.open(req, timeout=15) as resp:
         return resp.read()
 
 
@@ -165,13 +174,14 @@ async def async_get_episode_info(stb_url: str) -> dict:
 # Сайт надає список серій у вигляді HTML-сторінки з архівом серій.
 # ---------------------------------------------------------------------------
 
-MASTERCHEF_ARCHIVE = "https://www.stb.ua/masterchef/ru/video-2/"
+MASTERCHEF_ARCHIVE = "https://www.stb.ua/masterchef/ua/video-2/"
 
-# Matches episode cards: <a class="item-preview-link..." href="EPISODE_URL"><img ... alt="TITLE" ...>
+# Matches episode cards: extracting URL, poster and description (acting as the title)
 CARD_RE = re.compile(
     r'<a[^>]+href="(https://www\.stb\.ua/masterchef/(?:ru|ua)/episode/[^"]+)"[^>]*>'
-    r'\s*<img[^>]+src="([^"]+)"[^>]+alt="([^"]*)"',
-    re.DOTALL,
+    r'.*?<img[^>]+src="([^"]+)"'
+    r'.*?<p class="item-description">([^<]+)</p>',
+    re.DOTALL | re.IGNORECASE,
 )
 
 def search_episodes(query: str = '', limit: int = 20) -> list[dict]:
